@@ -10,6 +10,7 @@ const TAP_NAME = 'WEL TAP'
 const OPENVPN_READY = /Initialization Sequence Completed/i
 const OPENVPN_DATA_CIPHERS = 'AES-256-GCM:AES-128-GCM:AES-256-CBC'
 const OPENVPN_FALLBACK_CIPHER = 'AES-256-CBC'
+const OPENVPN_REMOTE_CERT_EKU = 'TLS Web Server Authentication'
 const LOG_DIRECTORY = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'WELPlatform', 'logs')
 
 let connection = null
@@ -81,7 +82,7 @@ function buildConfig({ host, port, username, token, roomID, subnetCidr }) {
     'auth-nocache',
     `auth-user-pass "${openVpnConfigPath(authPath)}"`,
     `ca "${openVpnConfigPath(caPath)}"`,
-    'remote-cert-tls server',
+    `remote-cert-eku "${OPENVPN_REMOTE_CERT_EKU}"`,
     `data-ciphers ${OPENVPN_DATA_CIPHERS}`,
     `data-ciphers-fallback ${OPENVPN_FALLBACK_CIPHER}`,
     `cipher ${OPENVPN_FALLBACK_CIPHER}`,
@@ -179,6 +180,7 @@ module.exports = {
   DEFAULT_PORT,
   OPENVPN_DATA_CIPHERS,
   OPENVPN_FALLBACK_CIPHER,
+  OPENVPN_REMOTE_CERT_EKU,
   TAP_NAME,
   connect,
   openVpnConfigPath,
