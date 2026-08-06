@@ -1,0 +1,42 @@
+name: Build Windows OpenVPN Client
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --ignore-scripts
+      - name: Test Electron helpers
+        run: npm run test:electron
+      - name: Build frontend
+        run: npm run build
+      - name: Check release runtime
+        id: runtime
+        shell: pwsh
+        run: |
+          $ready = (Test-Path 'resources/openvpn/bin/openvpn.exe') -and (Test-Path 'resources/openvpn/bin/tapctl.exe') -and (Test-Path 'resources/openvpn/driver/OemVista.inf') -and (Test-Path 'resources/openvpn/ca.crt')
+          "ready=$($ready.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+      - name: Build NSIS installer
+        if: steps.runtime.outputs.ready == 'true'
+        run: npx electron-builder --win nsis
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - name: Upload installer
+        if: steps.runtime.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wel-openvpn-windows-win7-nsis
+          path: frontend/release/*Setup*.exe
+          if-no-files-found: error
