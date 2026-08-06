@@ -24,6 +24,7 @@ const errorMessage = ref('')
 const notice = ref('')
 const desktopStatus = ref<DesktopStatus | null>(null)
 const pingResults = ref<Record<number, PingResult | undefined>>({})
+const selectedMemberId = ref<number | null>(null)
 const form = ref({ username: '', password: '' })
 const GAME_PATH_KEY = 'we8.game-path'
 const LEGACY_GAME_PATH_KEY = 'pes8.game-path'
@@ -96,6 +97,7 @@ function clearRoomSessionState() {
   activeLease.value = null
   networkStatus.value = null
   pingResults.value = {}
+  selectedMemberId.value = null
 }
 
 async function loadRoomMembers() {
@@ -400,6 +402,17 @@ async function pingMember(member: RoomMember) {
     }
   }
 }
+
+function openMemberDetail(member: RoomMember) {
+  selectedMemberId.value = member.user_id
+}
+
+function closeMemberDetail() {
+  selectedMemberId.value = null
+}
+
+const selectedMember = computed(() => roomMembers.value.find(member => member.user_id === selectedMemberId.value) ?? null)
+const selectedMemberPing = computed(() => selectedMember.value ? pingResults.value[selectedMember.value.user_id] ?? null : null)
 async function logout() {
   loading.value = true
   errorMessage.value = ''
@@ -488,8 +501,36 @@ onBeforeUnmount(() => {
         <section class="room-section"><div class="section-heading"><h3>可用房间</h3><button class="icon-button" title="刷新房间" @click="loadRooms" :disabled="loading"><RefreshCw :size="18" :class="{ spinning: loading }" /></button></div>
           <div class="room-grid"><article v-for="room in rooms" :key="room.id" class="room-card" :class="{ unavailable: room.status !== 'open' }"><div class="room-card-top"><span class="region">{{ room.region }}</span><span :class="['room-state', room.status]">{{ room.status === 'open' ? '可进入' : '维护中' }}</span></div><h3>{{ room.name }}</h3><p>{{ room.subnet_cidr }}</p><div class="room-card-footer"><span><Users :size="16" /> {{ room.members }} / {{ room.capacity }}</span><button class="join-button" :disabled="loading || room.status !== 'open' || Boolean(activeLease) || (desktop() && !desktopStatus?.ready)" @click="joinRoom(room)">进入</button></div></article></div>
         </section>
-        <aside v-if="activeLease" class="room-members-panel"><div class="section-heading"><div><p class="eyebrow">{{ roomInfoTitle }}</p><h3>房间成员</h3></div><span class="member-count">{{ roomMembers.length }} 人</span></div><div v-if="roomMembers.length" class="member-list"><div v-for="member in roomMembers" :key="member.user_id" class="member-row"><span class="member-avatar">{{ member.nickname.slice(0, 1) }}</span><span><strong>{{ member.nickname }}</strong><small>@{{ member.username }}</small><small>虚拟 {{ member.virtual_ip || '未分配' }}</small><small>真实 {{ member.real_ip || '未知' }}</small><small v-if="pingResults[member.user_id]" :class="['ping-result', { ok: pingResults[member.user_id]?.reachable }]">{{ pingResults[member.user_id]?.summary }}</small></span><button class="mini-button" :disabled="!member.virtual_ip" @click="pingMember(member)">Ping</button><em v-if="member.is_self">我</em></div></div><p v-else class="member-empty">正在读取房间成员...</p></aside>
+        <aside v-if="activeLease" class="room-members-panel"><div class="section-heading"><div><p class="eyebrow">{{ roomInfoTitle }}</p><h3>房间成员</h3></div><span class="member-count">{{ roomMembers.length }} 人</span></div><div v-if="roomMembers.length" class="member-list"><div v-for="member in roomMembers" :key="member.user_id" class="member-row"><span class="member-avatar">{{ member.nickname.slice(0, 1) }}</span><span><strong>{{ member.nickname }}</strong><small>@{{ member.username }}</small></span><button class="mini-button" @click="openMemberDetail(member)">详情</button><em v-if="member.is_self">我</em></div></div><p v-else class="member-empty">正在读取房间成员...</p></aside>
       </div>
+
+      <teleport to="body">
+        <div v-if="selectedMember" class="modal-backdrop" @click.self="closeMemberDetail">
+          <section class="member-modal" role="dialog" aria-modal="true" :aria-label="`${selectedMember.nickname} 详情`">
+            <header class="member-modal-header">
+              <div>
+                <p class="eyebrow">房间成员详情</p>
+                <h3>{{ selectedMember.nickname }}</h3>
+              </div>
+              <button class="icon-button modal-close" title="关闭" @click="closeMemberDetail">×</button>
+            </header>
+            <div class="member-modal-body">
+              <div class="detail-row"><span>账号</span><strong>@{{ selectedMember.username }}</strong></div>
+              <div class="detail-row"><span>身份</span><strong>{{ selectedMember.is_self ? '当前用户' : '房间成员' }}</strong></div>
+              <div class="detail-row"><span>虚拟 IP</span><strong>{{ selectedMember.virtual_ip || '未分配' }}</strong></div>
+              <div class="detail-row"><span>真实 IP</span><strong>{{ selectedMember.real_ip || '未知' }}</strong></div>
+              <div class="detail-row">
+                <span>Ping</span>
+                <strong :class="['ping-result', { ok: selectedMemberPing?.reachable }]">{{ selectedMemberPing?.summary || '尚未测试' }}</strong>
+              </div>
+            </div>
+            <footer class="member-modal-footer">
+              <button class="secondary-button" :disabled="!selectedMember.virtual_ip || !desktop()" @click="pingMember(selectedMember)">Ping</button>
+              <button class="primary-button" @click="closeMemberDetail">关闭</button>
+            </footer>
+          </section>
+        </div>
+      </teleport>
 
     </section>
   </main>
