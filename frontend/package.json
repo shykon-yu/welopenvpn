@@ -1,7 +1,7 @@
 {
   "name": "wel-openvpn-client",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "packageManager": "pnpm@11.11.0",
   "type": "module",
   "main": "electron/main.cjs",
@@ -19,7 +19,7 @@
     "vue": "^3.5.13"
   },
   "build": {
-    "appId": "com.we8.platform",
+    "appId": "com.wel.openvpn.client",
     "productName": "WEL OpenVPN对战平台",
     "directories": { "output": "release" },
     "files": ["dist/**/*", "electron/**/*"],
@@ -29,6 +29,7 @@
     "win": {
       "target": [{ "target": "nsis", "arch": ["x64"] }],
       "icon": "build/icon.ico",
+      "executableName": "WEL OpenVPN对战平台",
       "requestedExecutionLevel": "requireAdministrator"
     },
     "nsis": {
@@ -37,7 +38,7 @@
       "perMachine": true,
       "allowElevation": true,
       "allowToChangeInstallationDirectory": true,
-      "shortcutName": "WEL OpenVPN对战平台 v0.1.0",
+      "shortcutName": "WEL OpenVPN对战平台 v0.1.1",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
     }

@@ -7,6 +7,15 @@
   ExecWait '"$SYSDIR\msiexec.exe" /i "$PLUGINSDIR\wel-openvpn.msi" /qn /norestart' $0
 
 openvpn_ready:
+  ; The bundled OpenVPN GUI is not used by WEL. Keep only the WEL shortcuts.
+  SetShellVarContext all
+  Delete "$DESKTOP\OpenVPN GUI.lnk"
+  Delete "$SMPROGRAMS\OpenVPN\OpenVPN GUI.lnk"
+  SetShellVarContext current
+  Delete "$DESKTOP\OpenVPN GUI.lnk"
+  Delete "$SMPROGRAMS\OpenVPN\OpenVPN GUI.lnk"
+  SetShellVarContext all
+
   DetailPrint "正在创建 WEL TAP 虚拟网卡..."
   ExecWait '"$PROGRAMFILES64\OpenVPN\bin\tapctl.exe" delete "WEL TAP"' $1
   ExecWait '"$PROGRAMFILES64\OpenVPN\bin\tapctl.exe" create --name "WEL TAP"' $2
