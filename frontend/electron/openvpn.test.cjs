@@ -2,7 +2,8 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
-const { OPENVPN_DATA_CIPHERS, OPENVPN_FALLBACK_CIPHER, OPENVPN_REMOTE_CERT_EKU, openVpnConfigPath } = require('./openvpn.cjs')
+const os = require('node:os')
+const { OPENVPN_DATA_CIPHERS, OPENVPN_FALLBACK_CIPHER, OPENVPN_REMOTE_CERT_EKU, openVpnConfigPath, readRecentLog } = require('./openvpn.cjs')
 
 test('uses OpenVPN-safe paths in generated config values', () => {
   assert.equal(
@@ -25,4 +26,11 @@ test('checks server certificate EKU without requiring missing key usage extensio
   assert.match(client, new RegExp(`remote-cert-eku "\\$\\{OPENVPN_REMOTE_CERT_EKU\\}"`))
   assert.equal(OPENVPN_REMOTE_CERT_EKU, 'TLS Web Server Authentication')
   assert.doesNotMatch(client, /remote-cert-tls server/)
+})
+
+test('reads the latest openvpn log tail safely', () => {
+  const tempPath = path.join(os.tmpdir(), `wel-openvpn-${Date.now()}.log`)
+  fs.writeFileSync(tempPath, 'first line\r\nInitialization Sequence Completed\r\n', 'utf8')
+  assert.match(readRecentLog(tempPath), /Initialization Sequence Completed/)
+  fs.rmSync(tempPath, { force: true })
 })

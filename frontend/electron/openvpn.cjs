@@ -48,6 +48,14 @@ function recentOutput(output, limit = 2000) {
   return output.join('').replace(/\r?\n/g, '\n').trim().slice(-limit)
 }
 
+function readRecentLog(filePath, limit = 2000) {
+  try {
+    return fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8').replace(/\r?\n/g, '\n').trim().slice(-limit) : ''
+  } catch {
+    return ''
+  }
+}
+
 function openVpnConfigPath(filePath) {
   return String(filePath || '').replace(/\\/g, '/')
 }
@@ -156,7 +164,9 @@ async function connect({ host, port, roomID, username, token, subnetCidr }) {
     const startedAt = Date.now()
     while (Date.now() - startedAt < 30000) {
       if (failed) break
-      if (OPENVPN_READY.test(output.join(''))) {
+      const liveOutput = recentOutput(output)
+      const fileOutput = readRecentLog(files.logPath)
+      if (OPENVPN_READY.test(liveOutput) || OPENVPN_READY.test(fileOutput)) {
         initialized = true
         const network = await waitForVpnNetwork(subnetCidr, 8000)
         if (!network.connected) throw new Error(`OpenVPN 已连接，但未获取 ${subnetCidr} 的虚拟 IP`)
@@ -165,7 +175,7 @@ async function connect({ host, port, roomID, username, token, subnetCidr }) {
       await new Promise((resolve) => setTimeout(resolve, 300))
     }
     const liveOutput = recentOutput(output)
-    const fileOutput = fs.existsSync(files.logPath) ? fs.readFileSync(files.logPath, 'utf8').trim().slice(-2000) : ''
+    const fileOutput = readRecentLog(files.logPath)
     const reason = failed || '连接超时：未收到 OpenVPN 初始化完成信号'
     const detail = [reason, liveOutput || fileOutput].filter(Boolean).join('\n')
     throw new Error(`OpenVPN 连接失败：${detail || '连接超时'}\n日志文件：${files.logPath}`)
@@ -184,6 +194,7 @@ module.exports = {
   TAP_NAME,
   connect,
   openVpnConfigPath,
+  readRecentLog,
   status,
   stopConnection,
 }
