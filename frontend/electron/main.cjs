@@ -29,6 +29,12 @@ function showFatalError(error) {
   dialog.showErrorBox('WEL OpenVPN 对战平台启动失败', `${detail}\n\n错误日志：${LOG_FILE}`)
 }
 
+function frontendEntryPath() {
+  const packagedEntry = path.join(process.resourcesPath, 'frontend', 'index.html')
+  if (app.isPackaged && fs.existsSync(packagedEntry)) return packagedEntry
+  return path.join(__dirname, '..', 'dist', 'index.html')
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1180, height: 760, minWidth: 900, minHeight: 620,
@@ -40,7 +46,9 @@ function createWindow() {
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
     writeLog(`渲染进程退出：${details.reason}，代码 ${details.exitCode}`)
   })
-  mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html')).catch((error) => {
+  const entryPath = frontendEntryPath()
+  writeLog(`正在加载前端页面：${entryPath}`)
+  mainWindow.loadFile(entryPath).catch((error) => {
     showFatalError(error)
     app.quit()
   })
