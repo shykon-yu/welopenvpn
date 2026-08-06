@@ -18,6 +18,10 @@
 .member-row strong, .member-row small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .member-row strong { color: #2c4247; font-size: 13px; }
 .member-row small { color: #75858a; font-size: 11px; }
+.mini-button { height: 28px; min-width: 54px; padding: 0 10px; border: 1px solid #cbd7da; border-radius: 5px; color: #345058; background: #fff; font-size: 12px; }
+.mini-button:disabled { opacity: .55; }
+.ping-result { color: #75858a; }
+.ping-result.ok { color: #2d7041; }
 .member-avatar { width: 29px; height: 29px; flex: 0 0 29px; display: grid; place-items: center; color: #23575a; background: #e5f0ef; border-radius: 50%; font-size: 13px; font-weight: 700; }
 .member-row em { margin-left: auto; color: #2d7041; font-size: 11px; font-style: normal; }
 .member-empty { margin: 12px 0 0; color: #75858a; font-size: 13px; }

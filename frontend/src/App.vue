@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ClipboardCopy, FolderOpen, Gamepad2, LogOut, Play, RefreshCw, Router, ShieldCheck, Users } from 'lucide-vue-next'
 import { ApiError, authApi, clearToken, getAccessToken, hasToken, roomApi, setToken, type Lease, type Room, type RoomMember, type User } from './api'
-import type { DesktopLeaseStatus } from './electron'
+import type { DesktopLeaseStatus, PingResult } from './electron'
 import packageInfo from '../package.json'
 
 const APP_VERSION = `v${packageInfo.version}`
@@ -23,6 +23,7 @@ const loading = ref(false)
 const errorMessage = ref('')
 const notice = ref('')
 const desktopStatus = ref<DesktopStatus | null>(null)
+const pingResults = ref<Record<number, PingResult | undefined>>({})
 const form = ref({ username: '', password: '' })
 const GAME_PATH_KEY = 'we8.game-path'
 const LEGACY_GAME_PATH_KEY = 'pes8.game-path'
@@ -91,6 +92,12 @@ function startRoomMembersMonitor() {
   roomMembersTimer = window.setInterval(() => { void loadRoomMembers() }, roomMembersIntervalMs)
 }
 
+function clearRoomSessionState() {
+  activeLease.value = null
+  networkStatus.value = null
+  pingResults.value = {}
+}
+
 async function loadRoomMembers() {
   const lease = activeLease.value
   if (!lease) return
@@ -121,8 +128,7 @@ async function forceSignedOut(message: string) {
   if (lease) {
     try { await desktop()?.disconnectVpn(lease.username) } catch { /* the server has already revoked this session */ }
   }
-  activeLease.value = null
-  networkStatus.value = null
+  clearRoomSessionState()
   user.value = null
   rooms.value = []
   clearToken()
@@ -202,36 +208,25 @@ async function authenticate() {
 
 async function restoreSession() {
   if (!hasToken()) return
+  let previousLease: Lease | null = null
   try {
     user.value = (await authApi.me()).user
-    activeLease.value = (await authApi.roomSession()).lease
+    previousLease = (await authApi.roomSession()).lease
   } catch (error) {
     clearToken()
     if (error instanceof ApiError && error.status === 401) errorMessage.value = error.message
     return
   }
 
+  clearRoomSessionState()
   await loadRooms()
-
-  if (activeLease.value && desktop()) {
-    try {
-      networkStatus.value = await desktop()!.restoreVpn({
-        username: activeLease.value.username,
-        subnetCidr: activeLease.value.subnet_cidr,
-      })
-      if (!networkStatus.value.connected) {
-        const refreshed = (await roomApi.join(activeLease.value.room_id)).lease
-        activeLease.value = refreshed
-        networkStatus.value = await connectDesktopVpn(refreshed)
-      }
-    } catch (error) {
-      networkStatus.value = null
-      errorMessage.value = `房间网络恢复失败：${messageOf(error)}`
-    }
-  }
-  startLeaseHeartbeat()
-  startRoomMembersMonitor()
   startSessionMonitor()
+  if (previousLease) {
+    try { await desktop()?.disconnectVpn(previousLease.username) } catch { /* best effort cleanup */ }
+    try { await roomApi.leave(previousLease.room_id) } catch { /* stale room state will expire server-side */ }
+    notice.value = '已清理上次房间状态，请重新进入房间'
+    await loadRooms()
+  }
 }
 
 function connectDesktopVpn(lease: Lease) {
@@ -291,8 +286,7 @@ async function releaseActiveLease() {
   } catch (error) {
     if (!(error instanceof ApiError && error.status === 404)) cleanupError ??= error
   }
-  activeLease.value = null
-  networkStatus.value = null
+  clearRoomSessionState()
   if (cleanupError) throw cleanupError
 }
 
@@ -392,6 +386,20 @@ async function copyDiagnostics() {
     errorMessage.value = messageOf(error)
   }
 }
+
+async function pingMember(member: RoomMember) {
+  if (!desktop()) return
+  pingResults.value = { ...pingResults.value, [member.user_id]: { host: member.virtual_ip, reachable: false, summary: '正在 Ping...' } }
+  try {
+    const result = await desktop()!.pingHost(member.virtual_ip)
+    pingResults.value = { ...pingResults.value, [member.user_id]: result }
+  } catch (error) {
+    pingResults.value = {
+      ...pingResults.value,
+      [member.user_id]: { host: member.virtual_ip, reachable: false, summary: messageOf(error) },
+    }
+  }
+}
 async function logout() {
   loading.value = true
   errorMessage.value = ''
@@ -480,7 +488,7 @@ onBeforeUnmount(() => {
         <section class="room-section"><div class="section-heading"><h3>可用房间</h3><button class="icon-button" title="刷新房间" @click="loadRooms" :disabled="loading"><RefreshCw :size="18" :class="{ spinning: loading }" /></button></div>
           <div class="room-grid"><article v-for="room in rooms" :key="room.id" class="room-card" :class="{ unavailable: room.status !== 'open' }"><div class="room-card-top"><span class="region">{{ room.region }}</span><span :class="['room-state', room.status]">{{ room.status === 'open' ? '可进入' : '维护中' }}</span></div><h3>{{ room.name }}</h3><p>{{ room.subnet_cidr }}</p><div class="room-card-footer"><span><Users :size="16" /> {{ room.members }} / {{ room.capacity }}</span><button class="join-button" :disabled="loading || room.status !== 'open' || Boolean(activeLease) || (desktop() && !desktopStatus?.ready)" @click="joinRoom(room)">进入</button></div></article></div>
         </section>
-        <aside v-if="activeLease" class="room-members-panel"><div class="section-heading"><div><p class="eyebrow">{{ roomInfoTitle }}</p><h3>房间成员</h3></div><span class="member-count">{{ roomMembers.length }} 人</span></div><div v-if="roomMembers.length" class="member-list"><div v-for="member in roomMembers" :key="member.user_id" class="member-row"><span class="member-avatar">{{ member.nickname.slice(0, 1) }}</span><span><strong>{{ member.nickname }}</strong><small>@{{ member.username }}</small></span><em v-if="member.is_self">我</em></div></div><p v-else class="member-empty">正在读取房间成员...</p></aside>
+        <aside v-if="activeLease" class="room-members-panel"><div class="section-heading"><div><p class="eyebrow">{{ roomInfoTitle }}</p><h3>房间成员</h3></div><span class="member-count">{{ roomMembers.length }} 人</span></div><div v-if="roomMembers.length" class="member-list"><div v-for="member in roomMembers" :key="member.user_id" class="member-row"><span class="member-avatar">{{ member.nickname.slice(0, 1) }}</span><span><strong>{{ member.nickname }}</strong><small>@{{ member.username }}</small><small>虚拟 {{ member.virtual_ip || '未分配' }}</small><small>真实 {{ member.real_ip || '未知' }}</small><small v-if="pingResults[member.user_id]" :class="['ping-result', { ok: pingResults[member.user_id]?.reachable }]">{{ pingResults[member.user_id]?.summary }}</small></span><button class="mini-button" :disabled="!member.virtual_ip" @click="pingMember(member)">Ping</button><em v-if="member.is_self">我</em></div></div><p v-else class="member-empty">正在读取房间成员...</p></aside>
       </div>
 
     </section>

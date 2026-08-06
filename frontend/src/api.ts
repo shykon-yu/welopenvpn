@@ -5,7 +5,7 @@ const LEGACY_ACCESS_TOKEN_KEY = 'pes8.access-token'
 
 export type User = { id: number; username: string; nickname: string }
 export type Room = { id: number; code: string; name: string; region: string; subnet_cidr: string; capacity: number; members: number; status: 'open' | 'maintenance' | 'closed' }
-export type RoomMember = { user_id: number; username: string; nickname: string; is_self: boolean }
+export type RoomMember = { user_id: number; username: string; nickname: string; virtual_ip: string; real_ip?: string; is_self: boolean }
 export type Lease = { room_id: number; virtual_ip: string; username: string; password?: string; subnet_cidr: string; expires_at: string; server_host: string; server_port: number }
 
 type SessionResponse = { token: string; user: User }

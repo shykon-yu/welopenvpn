@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('we8Desktop', {
   desktopStatus: () => ipcRenderer.invoke('openvpn-status'),
   prepareDesktop: () => ipcRenderer.invoke('prepare-openvpn'),
   disconnectVpn: () => ipcRenderer.invoke('disconnect-openvpn'),
+  pingHost: (host) => ipcRenderer.invoke('ping-host', host),
   chooseGame: () => ipcRenderer.invoke('choose-game'),
   launchGame: (gamePath) => ipcRenderer.invoke('launch-game', gamePath),
 })

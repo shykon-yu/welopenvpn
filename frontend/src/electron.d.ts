@@ -30,6 +30,12 @@ export type DesktopStatus = {
   tapName?: string
 }
 
+export type PingResult = {
+  host: string
+  reachable: boolean
+  summary: string
+}
+
 declare global {
   interface Window {
     we8Desktop?: {
@@ -42,6 +48,7 @@ declare global {
       desktopStatus: () => Promise<DesktopStatus>
       prepareDesktop: () => Promise<DesktopStatus>
       disconnectVpn: (username: string) => Promise<void>
+      pingHost: (host: string) => Promise<PingResult>
       chooseGame: () => Promise<string | null>
       launchGame: (gamePath: string) => Promise<void>
     }

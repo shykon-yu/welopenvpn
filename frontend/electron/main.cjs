@@ -5,7 +5,7 @@ const path = require('node:path')
 const { pathToFileURL } = require('node:url')
 const { version: appVersion } = require('../package.json')
 const { configureGameFirewall } = require('./firewall.cjs')
-const { findNetstatLines, inspectVpnNetwork, parseTasklistPids, prioritizeVpnNetwork, runProcess } = require('./network.cjs')
+const { decodeProcessOutput, findNetstatLines, inspectVpnNetwork, parseTasklistPids, prioritizeVpnNetwork, runProcess } = require('./network.cjs')
 const openvpn = require('./openvpn.cjs')
 
 if (process.platform === 'win32') {
@@ -96,6 +96,38 @@ async function parseGameNetwork() {
   return lines.join('\n')
 }
 
+function parsePingSummary(host, output) {
+  const text = String(output || '').replace(/\r?\n/g, '\n')
+  const reachable = /TTL=/i.test(text)
+  const loss = text.match(/(\d+)%\s*(?:loss|丢失)/i)?.[1]
+  const average = text.match(/(?:Average|平均)\s*[=<]\s*(\d+ms)/i)?.[1]
+    || text.match(/平均\s*=\s*(\d+ms)/)?.[1]
+  const parts = []
+  if (reachable) parts.push('可达')
+  else parts.push('不可达')
+  if (average) parts.push(`平均 ${average}`)
+  if (loss !== undefined) parts.push(`丢包 ${loss}%`)
+  return { host, reachable, summary: parts.join('，') }
+}
+
+function pingHost(host) {
+  const target = String(host || '').trim()
+  if (!/^\d{1,3}(?:\.\d{1,3}){3}$/.test(target)) throw new Error('Ping 地址不正确')
+  const ping = `${process.env.SystemRoot || 'C:\\Windows'}\\System32\\ping.exe`
+  return new Promise((resolve) => {
+    const child = spawn(ping, ['-n', '4', '-w', '1000', target], { windowsHide: true })
+    const stdout = []
+    const stderr = []
+    child.stdout.on('data', (chunk) => stdout.push(chunk))
+    child.stderr.on('data', (chunk) => stderr.push(chunk))
+    child.once('error', (error) => resolve({ host: target, reachable: false, summary: `Ping 失败：${error.message}` }))
+    child.once('close', () => {
+      const output = [decodeProcessOutput(stdout), decodeProcessOutput(stderr)].filter(Boolean).join('\n')
+      resolve(parsePingSummary(target, output))
+    })
+  })
+}
+
 ipcMain.handle('openvpn-status', () => openvpn.status())
 ipcMain.handle('prepare-openvpn', () => {
   const current = openvpn.status()
@@ -106,6 +138,7 @@ ipcMain.handle('connect-openvpn', async (_event, credentials) => openvpn.connect
 ipcMain.handle('disconnect-openvpn', () => openvpn.stopConnection())
 ipcMain.handle('inspect-openvpn', (_event, { subnetCidr }) => inspectVpnNetwork(subnetCidr))
 ipcMain.handle('prioritize-openvpn', (_event, { subnetCidr }) => prioritizeVpnNetwork(subnetCidr))
+ipcMain.handle('ping-host', (_event, host) => pingHost(host))
 ipcMain.handle('configure-game-firewall', (_event, gamePath) => configureGameFirewall(resolveGameExecutable(gamePath)))
 ipcMain.handle('choose-game', async (event) => {
   const result = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), { title: '选择 WE8 游戏程序', properties: ['openFile'], filters: [{ name: 'WE8 游戏程序', extensions: ['exe'] }] })
