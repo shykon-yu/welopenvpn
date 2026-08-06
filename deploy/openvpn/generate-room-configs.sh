@@ -21,6 +21,9 @@ dh none
 ecdh-curve prime256v1
 verify-client-cert none
 username-as-common-name
+data-ciphers AES-256-GCM:AES-128-GCM:AES-256-CBC
+data-ciphers-fallback AES-256-CBC
+cipher AES-256-CBC
 
 # A dedicated layer-2 broadcast domain for this WE8 room. No redirect-gateway
 # or DNS options are pushed, so ordinary Internet traffic stays local.

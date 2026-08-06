@@ -1,10 +1,19 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { openVpnConfigPath } = require('./openvpn.cjs')
+const fs = require('node:fs')
+const path = require('node:path')
+const { OPENVPN_DATA_CIPHERS, OPENVPN_FALLBACK_CIPHER, openVpnConfigPath } = require('./openvpn.cjs')
 
 test('uses OpenVPN-safe paths in generated config values', () => {
   assert.equal(
     openVpnConfigPath('C:\\Users\\Administrator\\AppData\\Local\\WELPlatform\\runtime\\room.auth'),
     'C:/Users/Administrator/AppData/Local/WELPlatform/runtime/room.auth',
   )
+})
+
+test('keeps client and server cipher settings aligned', () => {
+  const generator = fs.readFileSync(path.join(__dirname, '..', '..', 'deploy', 'openvpn', 'generate-room-configs.sh'), 'utf8')
+  assert.match(generator, new RegExp(`data-ciphers ${OPENVPN_DATA_CIPHERS.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`))
+  assert.match(generator, new RegExp(`data-ciphers-fallback ${OPENVPN_FALLBACK_CIPHER}`))
+  assert.match(generator, new RegExp(`cipher ${OPENVPN_FALLBACK_CIPHER}`))
 })

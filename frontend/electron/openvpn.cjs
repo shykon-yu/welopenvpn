@@ -8,6 +8,8 @@ const DEFAULT_HOST = '8.133.189.9'
 const DEFAULT_PORT = 12001
 const TAP_NAME = 'WEL TAP'
 const OPENVPN_READY = /Initialization Sequence Completed/i
+const OPENVPN_DATA_CIPHERS = 'AES-256-GCM:AES-128-GCM:AES-256-CBC'
+const OPENVPN_FALLBACK_CIPHER = 'AES-256-CBC'
 const LOG_DIRECTORY = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'WELPlatform', 'logs')
 
 let connection = null
@@ -80,6 +82,9 @@ function buildConfig({ host, port, username, token, roomID, subnetCidr }) {
     `auth-user-pass "${openVpnConfigPath(authPath)}"`,
     `ca "${openVpnConfigPath(caPath)}"`,
     'remote-cert-tls server',
+    `data-ciphers ${OPENVPN_DATA_CIPHERS}`,
+    `data-ciphers-fallback ${OPENVPN_FALLBACK_CIPHER}`,
+    `cipher ${OPENVPN_FALLBACK_CIPHER}`,
     'route-nopull',
     'pull-filter ignore redirect-gateway',
     'pull-filter ignore dhcp-option',
@@ -160,7 +165,8 @@ async function connect({ host, port, roomID, username, token, subnetCidr }) {
     }
     const liveOutput = recentOutput(output)
     const fileOutput = fs.existsSync(files.logPath) ? fs.readFileSync(files.logPath, 'utf8').trim().slice(-2000) : ''
-    const detail = [failed, liveOutput || fileOutput].filter(Boolean).join('\n')
+    const reason = failed || '连接超时：未收到 OpenVPN 初始化完成信号'
+    const detail = [reason, liveOutput || fileOutput].filter(Boolean).join('\n')
     throw new Error(`OpenVPN 连接失败：${detail || '连接超时'}\n日志文件：${files.logPath}`)
   } catch (error) {
     stopConnection()
@@ -171,6 +177,8 @@ async function connect({ host, port, roomID, username, token, subnetCidr }) {
 module.exports = {
   DEFAULT_HOST,
   DEFAULT_PORT,
+  OPENVPN_DATA_CIPHERS,
+  OPENVPN_FALLBACK_CIPHER,
   TAP_NAME,
   connect,
   openVpnConfigPath,
