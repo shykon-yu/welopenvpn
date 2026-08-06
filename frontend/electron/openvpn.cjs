@@ -2,12 +2,13 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const { spawn } = require('node:child_process')
-const { inspectVpnNetwork, prioritizeVpnNetwork, waitForVpnNetwork } = require('./network.cjs')
+const { prioritizeVpnNetwork, waitForVpnNetwork } = require('./network.cjs')
 
 const DEFAULT_HOST = '8.133.189.9'
 const DEFAULT_PORT = 12001
 const TAP_NAME = 'WEL TAP'
 const OPENVPN_READY = /Initialization Sequence Completed/i
+const OPENVPN_PROGRESS = /(?:PUSH_REPLY|open_tun|tap-windows6 device \[.+?\] opened|Successful ARP Flush)/i
 const OPENVPN_DATA_CIPHERS = 'AES-256-GCM:AES-128-GCM:AES-256-CBC'
 const OPENVPN_FALLBACK_CIPHER = 'AES-256-CBC'
 const OPENVPN_REMOTE_CERT_EKU = 'TLS Web Server Authentication'
@@ -172,6 +173,13 @@ async function connect({ host, port, roomID, username, token, subnetCidr }) {
         if (!network.connected) throw new Error(`OpenVPN 已连接，但未获取 ${subnetCidr} 的虚拟 IP`)
         return prioritizeVpnNetwork(subnetCidr)
       }
+      if (OPENVPN_PROGRESS.test(liveOutput) || OPENVPN_PROGRESS.test(fileOutput)) {
+        const network = await waitForVpnNetwork(subnetCidr, 8000)
+        if (network.connected) {
+          initialized = true
+          return prioritizeVpnNetwork(subnetCidr)
+        }
+      }
       await new Promise((resolve) => setTimeout(resolve, 300))
     }
     const liveOutput = recentOutput(output)
@@ -190,6 +198,7 @@ module.exports = {
   DEFAULT_PORT,
   OPENVPN_DATA_CIPHERS,
   OPENVPN_FALLBACK_CIPHER,
+  OPENVPN_PROGRESS,
   OPENVPN_REMOTE_CERT_EKU,
   TAP_NAME,
   connect,

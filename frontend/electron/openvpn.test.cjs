@@ -3,7 +3,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const os = require('node:os')
-const { OPENVPN_DATA_CIPHERS, OPENVPN_FALLBACK_CIPHER, OPENVPN_REMOTE_CERT_EKU, openVpnConfigPath, readRecentLog } = require('./openvpn.cjs')
+const { OPENVPN_DATA_CIPHERS, OPENVPN_FALLBACK_CIPHER, OPENVPN_PROGRESS, OPENVPN_REMOTE_CERT_EKU, openVpnConfigPath, readRecentLog } = require('./openvpn.cjs')
 
 test('uses OpenVPN-safe paths in generated config values', () => {
   assert.equal(
@@ -33,4 +33,10 @@ test('reads the latest openvpn log tail safely', () => {
   fs.writeFileSync(tempPath, 'first line\r\nInitialization Sequence Completed\r\n', 'utf8')
   assert.match(readRecentLog(tempPath), /Initialization Sequence Completed/)
   fs.rmSync(tempPath, { force: true })
+})
+
+test('detects OpenVPN network configuration progress before final ready line', () => {
+  assert.match('PUSH_REPLY,route-gateway 10.80.1.1,ifconfig 10.80.1.10 255.255.255.0', OPENVPN_PROGRESS)
+  assert.match('tap-windows6 device [WEL TAP] opened', OPENVPN_PROGRESS)
+  assert.doesNotMatch('UDPv4 link remote: [AF_INET]8.133.189.9:12001', OPENVPN_PROGRESS)
 })
