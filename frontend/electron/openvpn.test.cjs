@@ -16,6 +16,8 @@ test('keeps client and server cipher settings aligned', () => {
   assert.match(generator, new RegExp(`data-ciphers ${OPENVPN_DATA_CIPHERS.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`))
   assert.match(generator, new RegExp(`data-ciphers-fallback ${OPENVPN_FALLBACK_CIPHER}`))
   assert.match(generator, new RegExp(`cipher ${OPENVPN_FALLBACK_CIPHER}`))
+  assert.match(generator, /setenv WEL_ROOM_ID \$\{room_id\}/)
+  assert.match(generator, /setenv WEL_API_BASE_URL \$\{api_base\}/)
 })
 
 test('checks server certificate EKU without requiring missing key usage extension', () => {

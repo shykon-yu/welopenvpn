@@ -2,6 +2,7 @@
 set -euo pipefail
 
 output_dir=${1:-/etc/welopenvpn/rooms}
+api_base=${WEL_API_BASE_URL:-http://127.0.0.1:8082/api/v1}
 mkdir -p "$output_dir"
 
 for room_id in 1 2 3 4 5 6; do
@@ -24,6 +25,8 @@ username-as-common-name
 data-ciphers AES-256-GCM:AES-128-GCM:AES-256-CBC
 data-ciphers-fallback AES-256-CBC
 cipher AES-256-CBC
+setenv WEL_ROOM_ID ${room_id}
+setenv WEL_API_BASE_URL ${api_base}
 
 # A dedicated layer-2 broadcast domain for this WE8 room. No redirect-gateway
 # or DNS options are pushed, so ordinary Internet traffic stays local.
