@@ -121,6 +121,7 @@ function removeFiles(files) {
 }
 
 function waitForProcessExit(process, timeoutMs) {
+  if (process.exitCode !== null || process.killed) return Promise.resolve(true)
   return new Promise((resolve) => {
     let settled = false
     const finish = (value) => {
@@ -139,17 +140,29 @@ function waitForProcessExit(process, timeoutMs) {
 function sendManagementSignal(port, command) {
   return new Promise((resolve, reject) => {
     const net = require('node:net')
+    let sent = false
+    let settled = false
+    const finish = (error) => {
+      if (settled) return
+      settled = true
+      if (error) reject(error)
+      else resolve()
+    }
     const socket = net.createConnection({ host: MANAGEMENT_HOST, port }, () => {
+      sent = true
       socket.write(`${command}\n`)
       socket.end()
     })
     socket.setTimeout(1500)
     socket.once('timeout', () => {
       socket.destroy()
-      reject(new Error('management timeout'))
+      finish(new Error('management timeout'))
     })
-    socket.once('error', reject)
-    socket.once('close', () => resolve())
+    socket.once('error', (error) => {
+      if (sent && ['ECONNRESET', 'EPIPE', 'ECONNABORTED'].includes(error.code)) finish()
+      else finish(error)
+    })
+    socket.once('close', () => finish())
   })
 }
 
@@ -159,11 +172,14 @@ async function stopConnection() {
   connection = null
   try {
     if (current.managementPort) {
-      await sendManagementSignal(current.managementPort, 'signal SIGTERM')
-      const exited = await waitForProcessExit(current.process, MANAGEMENT_STOP_TIMEOUT_MS)
-      if (!exited) {
-        try { current.process.kill() } catch {}
+      let exited = false
+      try {
+        await sendManagementSignal(current.managementPort, 'signal SIGTERM')
+        exited = await waitForProcessExit(current.process, MANAGEMENT_STOP_TIMEOUT_MS)
+      } catch {
+        exited = false
       }
+      if (!exited) try { current.process.kill() } catch {}
     } else {
       try { current.process.kill() } catch {}
     }

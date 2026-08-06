@@ -340,14 +340,42 @@ async function ensureGameFirewall(path: string) {
     return false
   }
 }
+
+function needsVpnPriorityAdjustment(status: DesktopLeaseStatus) {
+  return status.connected && (status.interfaceMetric !== 1 || status.conflictingAdapterIndexes.length > 0)
+}
+
+function vpnPriorityPrompt(status: DesktopLeaseStatus) {
+  const details = []
+  if (status.interfaceMetric !== 1) details.push(`当前 WEL TAP 优先级为 ${status.interfaceMetric ?? '未知'}`)
+  if (status.conflictingAdapters.length) details.push(`检测到冲突虚拟网卡：${status.conflictingAdapters.join('、')}`)
+  return [
+    '检测到当前网络环境可能影响 WE8 联机。',
+    details.join('\n'),
+    '需要管理员授权来优化 WEL TAP 网卡优先级。',
+    '如果不授权，可能出现搜不到主机、同意后连不上或联机不稳定。',
+    '现在进行优化吗？',
+  ].filter(Boolean).join('\n\n')
+}
+
+async function inspectAndMaybePrioritizeVpn(lease: Lease) {
+  const inspected = await desktop()!.inspectVpn({ username: lease.username, subnetCidr: lease.subnet_cidr })
+  if (!inspected.connected) throw new Error('尚未获取房间虚拟 IP，请退出房间后重新进入')
+  if (!needsVpnPriorityAdjustment(inspected)) return inspected
+  if (!window.confirm(vpnPriorityPrompt(inspected))) {
+    notice.value = '已跳过网卡优化；如果搜不到主机或连不上，请重新启动游戏并同意管理员授权'
+    return inspected
+  }
+  return desktop()!.prioritizeVpn({ username: lease.username, subnetCidr: lease.subnet_cidr })
+}
+
 async function launchGame() {
   errorMessage.value = ''
   if (!activeLease.value) { errorMessage.value = '请先进入一个房间并连接虚拟网络'; return }
   if (!gamePath.value.trim()) { errorMessage.value = '请先选择 WE8 游戏程序路径'; return }
   if (!desktop()) { notice.value = '浏览器预览不会启动本机程序，请在 Windows 客户端测试'; return }
   try {
-    networkStatus.value = await desktop()!.prioritizeVpn({ username: activeLease.value.username, subnetCidr: activeLease.value.subnet_cidr })
-    if (!networkStatus.value.connected) throw new Error('尚未获取房间虚拟 IP，请退出房间后重新进入')
+    networkStatus.value = await inspectAndMaybePrioritizeVpn(activeLease.value)
     if (!(await ensureGameFirewall(gamePath.value))) return
     await desktop()!.launchGame(gamePath.value)
   } catch (error) { errorMessage.value = messageOf(error) }
