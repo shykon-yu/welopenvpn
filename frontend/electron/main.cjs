@@ -2,10 +2,15 @@ const { app, BrowserWindow, Menu, clipboard, dialog, ipcMain } = require('electr
 const { spawn } = require('node:child_process')
 const fs = require('node:fs')
 const path = require('node:path')
+const { pathToFileURL } = require('node:url')
 const { version: appVersion } = require('../package.json')
 const { configureGameFirewall } = require('./firewall.cjs')
 const { findNetstatLines, inspectVpnNetwork, parseTasklistPids, prioritizeVpnNetwork, runProcess } = require('./network.cjs')
 const openvpn = require('./openvpn.cjs')
+
+if (process.platform === 'win32') {
+  app.commandLine.appendSwitch('no-sandbox')
+}
 
 const API_URL = process.env.VITE_API_BASE_URL || 'http://8.133.189.9:8082/api/v1'
 const LOG_DIRECTORY = path.join(process.env.LOCALAPPDATA || app.getPath('userData'), 'WELPlatform', 'logs')
@@ -40,15 +45,19 @@ function createWindow() {
     width: 1180, height: 760, minWidth: 900, minHeight: 620,
     title: `WEL职业联盟对战平台 v${appVersion}`,
     backgroundColor: '#f4f7f6',
-    webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false },
+    webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: false },
   })
   mainWindow.on('closed', () => { mainWindow = null })
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
     writeLog(`渲染进程退出：${details.reason}，代码 ${details.exitCode}`)
   })
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+    writeLog(`前端页面加载失败：${errorCode} ${errorDescription} ${validatedURL}`)
+  })
   const entryPath = frontendEntryPath()
-  writeLog(`正在加载前端页面：${entryPath}`)
-  mainWindow.loadFile(entryPath).catch((error) => {
+  const entryUrl = pathToFileURL(entryPath).toString()
+  writeLog(`正在加载前端页面：${entryUrl}`)
+  mainWindow.loadURL(entryUrl).catch((error) => {
     showFatalError(error)
     app.quit()
   })
@@ -111,7 +120,7 @@ ipcMain.handle('launch-game', (_event, gamePath) => {
   })
 })
 ipcMain.handle('copy-openvpn-diagnostics', async (_event, { subnetCidr, username }) => {
-  const [desktop, network, gameNetwork] = await Promise.all([openvpn.status(), inspectVpnNetwork(subnetCidr), parseGameNetwork()()])
+  const [desktop, network, gameNetwork] = await Promise.all([openvpn.status(), inspectVpnNetwork(subnetCidr), parseGameNetwork()])
   clipboard.writeText([
     `WEL客户端版本: ${appVersion}`,
     `联机组件: ${desktop.ready ? '已准备' : '未准备'}`,
