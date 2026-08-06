@@ -240,7 +240,7 @@ async function restoreSession() {
 function connectDesktopVpn(lease: Lease) {
   return desktop()!.connectVpn({
     host: import.meta.env.VITE_OPENVPN_HOST ?? lease.server_host,
-    port: Number(import.meta.env.VITE_OPENVPN_BASE_PORT ?? 1193) + lease.room_id,
+    port: Number(import.meta.env.VITE_OPENVPN_BASE_PORT ?? 12000) + lease.room_id,
     hub: lease.hub_name,
     username: lease.username,
     password: '',

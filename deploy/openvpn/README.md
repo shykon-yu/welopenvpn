@@ -26,10 +26,10 @@ permissions, Go sessions, room capacity and heartbeat behavior unchanged.
 5. Run `generate-room-configs.sh /etc/welopenvpn/rooms`.
 6. Install `systemd/welopenvpn@.service`, then enable instances `1` through
    `6`.
-7. Open UDP ports `1194` through `1199` in the cloud firewall and Ubuntu
-   firewall.
+7. Open UDP ports `12001` through `12006` in the cloud firewall and Ubuntu
+   firewall. UDP `1194` is already used by the existing SoftEther service.
 
-The client maps room 1 through 6 to UDP `1194` through `1199`. Each room uses
+The client maps room 1 through 6 to UDP `12001` through `12006`. Each room uses
 its existing `10.80.<room>.0/24` subnet and does not push a default gateway or
 DNS server.
 

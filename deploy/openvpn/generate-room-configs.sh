@@ -6,7 +6,7 @@ mkdir -p "$output_dir"
 
 for room_id in 1 2 3 4 5 6; do
   subnet="10.80.${room_id}"
-  port=$((1193 + room_id))
+  port=$((12000 + room_id))
   cat >"${output_dir}/room-${room_id}.conf" <<EOF
 port ${port}
 proto udp4

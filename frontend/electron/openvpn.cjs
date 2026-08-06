@@ -5,7 +5,7 @@ const { spawn } = require('node:child_process')
 const { inspectVpnNetwork, prioritizeVpnNetwork, waitForVpnNetwork } = require('./network.cjs')
 
 const DEFAULT_HOST = '8.133.189.9'
-const DEFAULT_PORT = 1194
+const DEFAULT_PORT = 12001
 const TAP_NAME = 'WEL TAP'
 const OPENVPN_READY = /Initialization Sequence Completed/i
 
