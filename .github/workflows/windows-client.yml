@@ -1,4 +1,4 @@
-name: Build Windows OpenVPN Client
+name: Build WEL Windows Client
 
 on:
   push:
@@ -37,6 +37,6 @@ jobs:
         if: steps.runtime.outputs.ready == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: wel-openvpn-windows-win7-nsis
-          path: frontend/release/*Setup*.exe
+          name: wel-windows-win7-nsis
+          path: frontend/release/WEL职业联盟对战平台-*-安装包.exe
           if-no-files-found: error

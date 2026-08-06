@@ -44,9 +44,9 @@ const virtualIpLabel = computed(() => {
 })
 const networkWarning = computed(() => networkStatus.value?.warnings.join('；') ?? '')
 const connectionTitle = computed(() => {
-  if (desktopStatus.value?.ready) return 'OpenVPN 联机组件已准备完成'
+  if (desktopStatus.value?.ready) return '联机组件已准备完成'
   if (desktopStatus.value?.isWindows7) return '需要安装兼容的 TAP 组件'
-  return '需要安装 OpenVPN 联机组件'
+  return '需要安装 WEL 联机组件'
 })
 const gamePathLabel = computed(() => gamePath.value.trim() || '未选择 WE8 游戏程序')
 const desktop = () => window.we8Desktop

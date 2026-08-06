@@ -30,7 +30,7 @@ function safeFilePart(value) {
 }
 
 function ensureRuntimeDirectory() {
-  const directory = path.join(os.homedir(), 'AppData', 'Local', 'WELOpenVPN', 'runtime')
+  const directory = path.join(os.homedir(), 'AppData', 'Local', 'WELPlatform', 'runtime')
   fs.mkdirSync(directory, { recursive: true })
   return directory
 }
@@ -45,7 +45,7 @@ function bundledCaPath() {
 
 function buildConfig({ host, port, username, token, roomID, subnetCidr }) {
   const caPath = bundledCaPath()
-  if (!caPath) throw new Error('OpenVPN CA 证书未随客户端安装，请重新安装 WEL OpenVPN 客户端')
+  if (!caPath) throw new Error('联机证书未随客户端安装，请重新安装 WEL职业联盟对战平台')
   const runtime = ensureRuntimeDirectory()
   const prefix = `room-${safeFilePart(roomID)}-${safeFilePart(username)}`
   const authPath = path.join(runtime, `${prefix}.auth`)
@@ -98,8 +98,8 @@ function status() {
     openvpnInstalled: Boolean(executable),
     tapName: TAP_NAME,
     message: ready
-      ? 'OpenVPN 联机组件已准备好'
-      : '未检测到 WEL OpenVPN 联机组件，请重新运行完整安装包并同意管理员授权。',
+      ? '联机组件已准备好'
+      : '未检测到 WEL 联机组件，请重新运行完整安装包并同意管理员授权。',
   }
 }
 
