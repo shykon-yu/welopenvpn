@@ -19,7 +19,7 @@ room lease.
 ## Current milestone
 
 The application connection lifecycle and server configuration are implemented.
-Windows packaging remains intentionally disabled until a verified Win7-
-compatible OpenVPN 2.5 runtime, TAP driver, and public server CA certificate
-are staged in `frontend/resources/openvpn/`. Private server keys must never be
-committed.
+Windows packaging uses the official OpenVPN 2.5.10 I601 x64 MSI and the public
+server CA certificate. The WEL installer silently installs the shared OpenVPN
+runtime when absent, then creates only the dedicated `WEL TAP` adapter. Private
+server keys are never committed.

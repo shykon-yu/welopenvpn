@@ -5,5 +5,4 @@ frontend/dist/
 frontend/release/
 frontend/resources/openvpn/bin/
 frontend/resources/openvpn/driver/
-frontend/resources/openvpn/ca.crt
 *.log

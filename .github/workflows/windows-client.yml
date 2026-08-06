@@ -26,7 +26,7 @@ jobs:
         id: runtime
         shell: pwsh
         run: |
-          $ready = (Test-Path 'resources/openvpn/bin/openvpn.exe') -and (Test-Path 'resources/openvpn/bin/tapctl.exe') -and (Test-Path 'resources/openvpn/driver/OemVista.inf') -and (Test-Path 'resources/openvpn/ca.crt')
+          $ready = (Test-Path 'build/OpenVPN-2.5.10-I601-amd64.msi') -and (Test-Path 'resources/openvpn/ca.crt')
           "ready=$($ready.ToString().ToLower())" >> $env:GITHUB_OUTPUT
       - name: Build NSIS installer
         if: steps.runtime.outputs.ready == 'true'

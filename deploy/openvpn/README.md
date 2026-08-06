@@ -35,6 +35,6 @@ DNS server.
 
 ## Release resources
 
-Before packaging the Windows app, put a Win7-compatible OpenVPN 2.5 runtime
-and the public `ca.crt` into `frontend/resources/openvpn/`. Never commit the
-server private key.
+The Windows installer uses the official OpenVPN 2.5.10 I601 x64 MSI committed
+under `frontend/build/`. Copy only the public `ca.crt` into
+`frontend/resources/openvpn/`. Never commit the server private key.

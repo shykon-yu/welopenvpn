@@ -1,9 +1,10 @@
 # WEL OpenVPN Runtime
 
-Release builds must place a Win7-compatible OpenVPN 2.5 runtime and the public
-server CA certificate in this directory before packaging. The Electron client
-expects `bin/openvpn.exe`, `bin/tapctl.exe`, `driver/OemVista.inf` with its
-signed driver files, and `ca.crt` under the installed `resources/openvpn`
-directory.
+Release builds include the official Win7-compatible OpenVPN 2.5.10 I601 x64
+MSI from `frontend/build/`. The public server CA certificate is stored here as
+`ca.crt` and copied into the installed application's resources directory.
 
-Do not place private keys or a shared `tls-crypt` key in the repository.
+Official MSI SHA-256:
+`ddcac52d40c5a76fa0d4436accd4c91543ce044974661fd683612aefa0de654a`.
+
+Never place server private keys in the repository.
