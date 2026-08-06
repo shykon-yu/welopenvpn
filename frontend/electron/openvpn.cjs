@@ -8,6 +8,7 @@ const DEFAULT_HOST = '8.133.189.9'
 const DEFAULT_PORT = 12001
 const TAP_NAME = 'WEL TAP'
 const OPENVPN_READY = /Initialization Sequence Completed/i
+const LOG_DIRECTORY = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'WELPlatform', 'logs')
 
 let connection = null
 
@@ -35,6 +36,15 @@ function ensureRuntimeDirectory() {
   return directory
 }
 
+function ensureLogDirectory() {
+  fs.mkdirSync(LOG_DIRECTORY, { recursive: true })
+  return LOG_DIRECTORY
+}
+
+function recentOutput(output, limit = 2000) {
+  return output.join('').replace(/\r?\n/g, '\n').trim().slice(-limit)
+}
+
 function bundledCaPath() {
   const candidates = [
     path.join(process.resourcesPath || '', 'openvpn', 'ca.crt'),
@@ -50,7 +60,9 @@ function buildConfig({ host, port, username, token, roomID, subnetCidr }) {
   const prefix = `room-${safeFilePart(roomID)}-${safeFilePart(username)}`
   const authPath = path.join(runtime, `${prefix}.auth`)
   const configPath = path.join(runtime, `${prefix}.ovpn`)
+  const logPath = path.join(ensureLogDirectory(), `${prefix}.openvpn.log`)
   fs.writeFileSync(authPath, `${username}\r\n${token}\r\n`, { encoding: 'utf8', mode: 0o600 })
+  fs.writeFileSync(logPath, '', { encoding: 'utf8' })
   const config = [
     'client',
     'dev tap',
@@ -68,11 +80,12 @@ function buildConfig({ host, port, username, token, roomID, subnetCidr }) {
     'pull-filter ignore redirect-gateway',
     'pull-filter ignore dhcp-option',
     'verb 3',
+    `log "${logPath}"`,
     `setenv WEL_ROOM_ID ${roomID}`,
     `setenv WEL_SUBNET ${subnetCidr}`,
   ].join('\r\n') + '\r\n'
   fs.writeFileSync(configPath, config, { encoding: 'utf8', mode: 0o600 })
-  return { authPath, configPath }
+  return { authPath, configPath, logPath }
 }
 
 function removeFiles(files) {
@@ -86,7 +99,7 @@ function stopConnection() {
   const current = connection
   connection = null
   try { current.process.kill() } catch { /* already stopped */ }
-  removeFiles(current.files)
+  removeFiles(current.temporaryFiles)
 }
 
 function status() {
@@ -127,7 +140,7 @@ async function connect({ host, port, roomID, username, token, subnetCidr }) {
   child.once('close', (code) => {
     if (!initialized) failed = `OpenVPN 进程提前退出（代码 ${code ?? '未知'}）`
   })
-  connection = { process: child, files: Object.values(files) }
+  connection = { process: child, temporaryFiles: [files.authPath, files.configPath], logPath: files.logPath }
 
   try {
     const startedAt = Date.now()
@@ -141,7 +154,10 @@ async function connect({ host, port, roomID, username, token, subnetCidr }) {
       }
       await new Promise((resolve) => setTimeout(resolve, 300))
     }
-    throw new Error(`OpenVPN 连接失败：${failed || output.join('').slice(-800) || '连接超时'}`)
+    const liveOutput = recentOutput(output)
+    const fileOutput = fs.existsSync(files.logPath) ? fs.readFileSync(files.logPath, 'utf8').trim().slice(-2000) : ''
+    const detail = [failed, liveOutput || fileOutput].filter(Boolean).join('\n')
+    throw new Error(`OpenVPN 连接失败：${detail || '连接超时'}\n日志文件：${files.logPath}`)
   } catch (error) {
     stopConnection()
     throw error
