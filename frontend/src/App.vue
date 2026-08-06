@@ -238,9 +238,11 @@ async function restoreSession() {
 }
 
 function connectDesktopVpn(lease: Lease) {
+  const configuredBasePort = Number(import.meta.env.VITE_OPENVPN_BASE_PORT ?? 12000)
+  const serverPort = Number(lease.server_port)
   return desktop()!.connectVpn({
     host: import.meta.env.VITE_OPENVPN_HOST ?? lease.server_host,
-    port: Number(import.meta.env.VITE_OPENVPN_BASE_PORT ?? 12000) + lease.room_id,
+    port: Number.isFinite(serverPort) && serverPort > 0 ? serverPort : configuredBasePort + lease.room_id,
     hub: lease.hub_name,
     username: lease.username,
     password: '',
