@@ -32,7 +32,7 @@ setenv WEL_API_BASE_URL ${api_base}
 # or DNS options are pushed, so ordinary Internet traffic stays local.
 server-bridge ${subnet}.1 255.255.255.0 ${subnet}.10 ${subnet}.109
 client-to-client
-keepalive 10 60
+keepalive 5 20
 persist-key
 persist-tun
 script-security 3

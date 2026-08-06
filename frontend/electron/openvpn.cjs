@@ -15,6 +15,8 @@ const OPENVPN_DATA_CIPHERS = 'AES-256-GCM:AES-128-GCM:AES-256-CBC'
 const OPENVPN_FALLBACK_CIPHER = 'AES-256-CBC'
 const OPENVPN_REMOTE_CERT_EKU = 'TLS Web Server Authentication'
 const LOG_DIRECTORY = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'WELPlatform', 'logs')
+const MANAGEMENT_HOST = '127.0.0.1'
+const MANAGEMENT_STOP_TIMEOUT_MS = 3000
 
 let connection = null
 
@@ -79,6 +81,7 @@ function buildConfig({ host, port, username, token, roomID, subnetCidr }) {
   const authPath = path.join(runtime, `${prefix}.auth`)
   const configPath = path.join(runtime, `${prefix}.ovpn`)
   const logPath = path.join(ensureLogDirectory(), `${prefix}.openvpn.log`)
+  const managementPort = 25000 + (Number(roomID) % 1000)
   fs.writeFileSync(authPath, `${username}\r\n${token}\r\n`, { encoding: 'utf8', mode: 0o600 })
   fs.writeFileSync(logPath, '', { encoding: 'utf8' })
   const config = [
@@ -88,6 +91,7 @@ function buildConfig({ host, port, username, token, roomID, subnetCidr }) {
     'proto udp4',
     'explicit-exit-notify 1',
     `remote ${host} ${port}`,
+    `management ${MANAGEMENT_HOST} ${managementPort}`,
     'nobind',
     'persist-key',
     'persist-tun',
@@ -107,7 +111,7 @@ function buildConfig({ host, port, username, token, roomID, subnetCidr }) {
     `setenv WEL_SUBNET ${subnetCidr}`,
   ].join('\r\n') + '\r\n'
   fs.writeFileSync(configPath, config, { encoding: 'utf8', mode: 0o600 })
-  return { authPath, configPath, logPath }
+  return { authPath, configPath, logPath, managementPort }
 }
 
 function removeFiles(files) {
@@ -116,12 +120,56 @@ function removeFiles(files) {
   }
 }
 
-function stopConnection() {
+function waitForProcessExit(process, timeoutMs) {
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (value) => {
+      if (settled) return
+      settled = true
+      resolve(value)
+    }
+    const timer = setTimeout(() => finish(false), timeoutMs)
+    process.once('close', () => {
+      clearTimeout(timer)
+      finish(true)
+    })
+  })
+}
+
+function sendManagementSignal(port, command) {
+  return new Promise((resolve, reject) => {
+    const net = require('node:net')
+    const socket = net.createConnection({ host: MANAGEMENT_HOST, port }, () => {
+      socket.write(`${command}\n`)
+      socket.end()
+    })
+    socket.setTimeout(1500)
+    socket.once('timeout', () => {
+      socket.destroy()
+      reject(new Error('management timeout'))
+    })
+    socket.once('error', reject)
+    socket.once('close', () => resolve())
+  })
+}
+
+async function stopConnection() {
   if (!connection) return
   const current = connection
   connection = null
-  try { current.process.kill() } catch { /* already stopped */ }
-  removeFiles(current.temporaryFiles)
+  try {
+    if (current.managementPort) {
+      await sendManagementSignal(current.managementPort, 'signal SIGTERM')
+      const exited = await waitForProcessExit(current.process, MANAGEMENT_STOP_TIMEOUT_MS)
+      if (!exited) {
+        try { current.process.kill() } catch {}
+      }
+    } else {
+      try { current.process.kill() } catch {}
+    }
+  } finally {
+    removeFiles(current.temporaryFiles)
+  }
 }
 
 function status() {
@@ -160,7 +208,7 @@ Get-WmiObject Win32_Process -Filter "Name = 'openvpn.exe'" |
 }
 
 async function connectAttempt({ executable, host, port, roomID, username, token, subnetCidr }) {
-  stopConnection()
+  await stopConnection()
   const files = buildConfig({
     host: host || DEFAULT_HOST,
     port: Number(port) || DEFAULT_PORT,
@@ -179,7 +227,7 @@ async function connectAttempt({ executable, host, port, roomID, username, token,
   child.once('close', (code) => {
     if (!initialized) failed = `OpenVPN 进程提前退出（代码 ${code ?? '未知'}）`
   })
-  connection = { process: child, temporaryFiles: [files.authPath, files.configPath], logPath: files.logPath }
+  connection = { process: child, temporaryFiles: [files.authPath, files.configPath], logPath: files.logPath, managementPort: files.managementPort }
 
   try {
     const startedAt = Date.now()
@@ -208,7 +256,7 @@ async function connectAttempt({ executable, host, port, roomID, username, token,
     const detail = [reason, liveOutput || fileOutput].filter(Boolean).join('\n')
     throw new Error(`OpenVPN 连接失败：${detail || '连接超时'}\n日志文件：${files.logPath}`)
   } catch (error) {
-    stopConnection()
+    await stopConnection()
     throw error
   }
 }
@@ -218,7 +266,7 @@ async function connect({ host, port, roomID, username, token, subnetCidr }) {
   if (!executable) throw new Error('未检测到 OpenVPN 运行组件，请重新运行完整安装包')
   if (!token || !username || !roomID || !subnetCidr) throw new Error('OpenVPN 房间凭据不完整')
 
-  stopConnection()
+  await stopConnection()
   await stopStaleWelOpenVpnProcesses()
 
   let lastError = null
