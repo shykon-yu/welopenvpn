@@ -45,6 +45,10 @@ function recentOutput(output, limit = 2000) {
   return output.join('').replace(/\r?\n/g, '\n').trim().slice(-limit)
 }
 
+function openVpnConfigPath(filePath) {
+  return String(filePath || '').replace(/\\/g, '/')
+}
+
 function bundledCaPath() {
   const candidates = [
     path.join(process.resourcesPath || '', 'openvpn', 'ca.crt'),
@@ -73,14 +77,14 @@ function buildConfig({ host, port, username, token, roomID, subnetCidr }) {
     'persist-key',
     'persist-tun',
     'auth-nocache',
-    `auth-user-pass "${authPath}"`,
-    `ca "${caPath}"`,
+    `auth-user-pass "${openVpnConfigPath(authPath)}"`,
+    `ca "${openVpnConfigPath(caPath)}"`,
     'remote-cert-tls server',
     'route-nopull',
     'pull-filter ignore redirect-gateway',
     'pull-filter ignore dhcp-option',
     'verb 3',
-    `log "${logPath}"`,
+    `log "${openVpnConfigPath(logPath)}"`,
     `setenv WEL_ROOM_ID ${roomID}`,
     `setenv WEL_SUBNET ${subnetCidr}`,
   ].join('\r\n') + '\r\n'
@@ -169,6 +173,7 @@ module.exports = {
   DEFAULT_PORT,
   TAP_NAME,
   connect,
+  openVpnConfigPath,
   status,
   stopConnection,
 }
