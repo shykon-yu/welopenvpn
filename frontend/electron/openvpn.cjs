@@ -9,6 +9,8 @@ const DEFAULT_PORT = 12001
 const TAP_NAME = 'WEL TAP'
 const OPENVPN_READY = /Initialization Sequence Completed/i
 const OPENVPN_PROGRESS = /(?:PUSH_REPLY|open_tun|tap-windows6 device \[.+?\] opened|Successful ARP Flush)/i
+const CONNECT_TIMEOUT_MS = 30000
+const CONNECT_MAX_ATTEMPTS = 3
 const OPENVPN_DATA_CIPHERS = 'AES-256-GCM:AES-128-GCM:AES-256-CBC'
 const OPENVPN_FALLBACK_CIPHER = 'AES-256-CBC'
 const OPENVPN_REMOTE_CERT_EKU = 'TLS Web Server Authentication'
@@ -135,12 +137,16 @@ function status() {
   }
 }
 
-async function connect({ host, port, roomID, username, token, subnetCidr }) {
-  const executable = locateOpenVpn()
-  if (!executable) throw new Error('未检测到 OpenVPN 运行组件，请重新运行完整安装包')
-  if (!token || !username || !roomID || !subnetCidr) throw new Error('OpenVPN 房间凭据不完整')
-  stopConnection()
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
 
+function isRetryableConnectError(error) {
+  return /连接超时：未收到 OpenVPN 初始化完成信号/.test(String(error?.message || error || ''))
+}
+
+async function connectAttempt({ executable, host, port, roomID, username, token, subnetCidr }) {
+  stopConnection()
   const files = buildConfig({
     host: host || DEFAULT_HOST,
     port: Number(port) || DEFAULT_PORT,
@@ -163,7 +169,7 @@ async function connect({ host, port, roomID, username, token, subnetCidr }) {
 
   try {
     const startedAt = Date.now()
-    while (Date.now() - startedAt < 30000) {
+    while (Date.now() - startedAt < CONNECT_TIMEOUT_MS) {
       if (failed) break
       const liveOutput = recentOutput(output)
       const fileOutput = readRecentLog(files.logPath)
@@ -180,7 +186,7 @@ async function connect({ host, port, roomID, username, token, subnetCidr }) {
           return prioritizeVpnNetwork(subnetCidr)
         }
       }
-      await new Promise((resolve) => setTimeout(resolve, 300))
+      await wait(300)
     }
     const liveOutput = recentOutput(output)
     const fileOutput = readRecentLog(files.logPath)
@@ -193,15 +199,36 @@ async function connect({ host, port, roomID, username, token, subnetCidr }) {
   }
 }
 
+async function connect({ host, port, roomID, username, token, subnetCidr }) {
+  const executable = locateOpenVpn()
+  if (!executable) throw new Error('未检测到 OpenVPN 运行组件，请重新运行完整安装包')
+  if (!token || !username || !roomID || !subnetCidr) throw new Error('OpenVPN 房间凭据不完整')
+
+  let lastError = null
+  for (let attempt = 1; attempt <= CONNECT_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      return await connectAttempt({ executable, host, port, roomID, username, token, subnetCidr })
+    } catch (error) {
+      lastError = error
+      if (attempt >= CONNECT_MAX_ATTEMPTS || !isRetryableConnectError(error)) throw error
+      await wait(attempt * 1200)
+    }
+  }
+  throw lastError
+}
+
 module.exports = {
   DEFAULT_HOST,
   DEFAULT_PORT,
+  CONNECT_MAX_ATTEMPTS,
+  CONNECT_TIMEOUT_MS,
   OPENVPN_DATA_CIPHERS,
   OPENVPN_FALLBACK_CIPHER,
   OPENVPN_PROGRESS,
   OPENVPN_REMOTE_CERT_EKU,
   TAP_NAME,
   connect,
+  isRetryableConnectError,
   openVpnConfigPath,
   readRecentLog,
   status,
