@@ -1,8 +1,7 @@
 # WEL OpenVPN Server
 
-This deployment runs six independent OpenVPN TAP broadcast domains. It does
-not change or stop SoftEther. A player can use either client, but should not
-keep both VPN clients connected at the same time.
+This deployment runs six independent OpenVPN TAP broadcast domains. A player
+should not keep multiple VPN clients for WE8 connected at the same time.
 
 ## Authentication model
 
@@ -27,7 +26,8 @@ permissions, Go sessions, room capacity and heartbeat behavior unchanged.
 6. Install `systemd/welopenvpn@.service`, then enable instances `1` through
    `6`.
 7. Open UDP ports `12001` through `12006` in the cloud firewall and Ubuntu
-   firewall. UDP `1194` is already used by the existing SoftEther service.
+   firewall. If UDP `1194` is already occupied, keep using the per-room high
+   ports from this template.
 
 The client maps room 1 through 6 to UDP `12001` through `12006`. Each room uses
 its existing `10.80.<room>.0/24` subnet and does not push a default gateway or

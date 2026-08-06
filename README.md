@@ -1,8 +1,7 @@
-# WEL OpenVPN Client
+# WEL 职业联盟对战平台
 
-An OpenVPN TAP transport experiment for the WEL WE8 platform. It intentionally
-runs alongside the existing SoftEther platform and does not modify or stop
-SoftEther services.
+An OpenVPN TAP transport for the WEL WE8 platform. This is the active Windows
+client line for the platform.
 
 ## Structure
 
@@ -11,10 +10,9 @@ SoftEther services.
   verifier.
 - `.github/workflows/`: frontend checks and conditional Windows packaging.
 
-The client continues to use the production Laravel/Go login, room, membership
-and heartbeat APIs. OpenVPN authentication sends the current platform JWT to
-the room instance; the server verifies that token against the existing active
-room lease.
+The client uses the production Laravel/Go login, room, membership and heartbeat
+APIs. OpenVPN authentication sends the current platform JWT to the room
+instance; the server verifies that token against the active room lease.
 
 ## Current milestone
 

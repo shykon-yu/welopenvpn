@@ -8,13 +8,10 @@ import packageInfo from '../package.json'
 const APP_VERSION = `v${packageInfo.version}`
 
 type DesktopStatus = {
-  admin: boolean
-  softetherInstalled?: boolean
-  vpncmdPath: string | null
   ready: boolean
   message: string
-  isWindows7?: boolean
-  systemVersion?: string
+  openvpnInstalled: boolean
+  tapName?: string
 }
 
 const user = ref<User | null>(null)
@@ -33,10 +30,11 @@ const FIREWALL_GAME_PATH_KEY = 'we8.firewall-game-path'
 const gamePath = ref(localStorage.getItem(GAME_PATH_KEY) ?? localStorage.getItem(LEGACY_GAME_PATH_KEY) ?? '')
 const totalOnline = computed(() => rooms.value.reduce((total, room) => total + room.members, 0))
 const activeRoom = computed(() => activeLease.value ? rooms.value.find(room => room.id === activeLease.value?.room_id) ?? null : null)
-const roomInfoTitle = computed(() => activeLease.value ? activeRoom.value?.name ?? activeLease.value.hub_name : '未进入房间')
+const activeRoomName = computed(() => activeRoom.value?.name ?? (activeLease.value ? `房间 ${activeLease.value.room_id}` : '未进入房间'))
+const roomInfoTitle = computed(() => activeLease.value ? activeRoomName.value : '未进入房间')
 const roomInfoSubtitle = computed(() => {
   if (!activeLease.value) return '请选择一个可用房间进入'
-  return networkStatus.value?.connected ? `${activeLease.value.hub_name} · 网络已连接` : `${activeLease.value.hub_name} · 正在确认网络`
+  return networkStatus.value?.connected ? `${activeRoomName.value} · 网络已连接` : `${activeRoomName.value} · 正在确认网络`
 })
 const virtualIpLabel = computed(() => {
   if (!activeLease.value) return '待分配'
@@ -45,7 +43,6 @@ const virtualIpLabel = computed(() => {
 const networkWarning = computed(() => networkStatus.value?.warnings.join('；') ?? '')
 const connectionTitle = computed(() => {
   if (desktopStatus.value?.ready) return '联机组件已准备完成'
-  if (desktopStatus.value?.isWindows7) return '需要安装兼容的 TAP 组件'
   return '需要安装 WEL 联机组件'
 })
 const gamePathLabel = computed(() => gamePath.value.trim() || '未选择 WE8 游戏程序')
@@ -243,12 +240,9 @@ function connectDesktopVpn(lease: Lease) {
   return desktop()!.connectVpn({
     host: import.meta.env.VITE_OPENVPN_HOST ?? lease.server_host,
     port: Number.isFinite(serverPort) && serverPort > 0 ? serverPort : configuredBasePort + lease.room_id,
-    hub: lease.hub_name,
     username: lease.username,
-    password: '',
     roomID: lease.room_id,
     token: getAccessToken(),
-    nicName: 'WEL TAP',
     subnetCidr: lease.subnet_cidr,
   })
 }
@@ -364,7 +358,6 @@ async function copyDiagnostics() {
     networkStatus.value = await desktop()!.copyVpnDiagnostics({
       username: activeLease.value.username,
       subnetCidr: activeLease.value.subnet_cidr,
-      hub: activeLease.value.hub_name,
     })
     notice.value = '联机诊断信息已复制'
   } catch (error) {

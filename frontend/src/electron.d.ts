@@ -1,13 +1,10 @@
 export type DesktopLease = {
   host: string
   port: number
-  hub: string
   username: string
-  password: string
-  nicName?: string
   subnetCidr: string
-  roomID?: number
-  token?: string
+  roomID: number
+  token: string
 }
 
 export type DesktopLeaseStatus = {
@@ -27,16 +24,9 @@ export type DesktopLeaseStatus = {
 }
 
 export type DesktopStatus = {
-  admin: boolean
-  softetherInstalled: boolean
-  vpncmdPath: string | null
   ready: boolean
   message: string
-  serviceInstalled?: boolean
-  serviceRunning?: boolean
-  systemVersion?: string
-  isWindows7?: boolean
-  openvpnInstalled?: boolean
+  openvpnInstalled: boolean
   tapName?: string
 }
 
@@ -47,7 +37,7 @@ declare global {
       restoreVpn: (lease: Pick<DesktopLease, 'username' | 'subnetCidr'>) => Promise<DesktopLeaseStatus>
       inspectVpn: (lease: Pick<DesktopLease, 'username' | 'subnetCidr'>) => Promise<DesktopLeaseStatus>
       prioritizeVpn: (lease: Pick<DesktopLease, 'username' | 'subnetCidr'>) => Promise<DesktopLeaseStatus>
-      copyVpnDiagnostics: (lease: Pick<DesktopLease, 'username' | 'subnetCidr'> & { hub: string }) => Promise<DesktopLeaseStatus>
+      copyVpnDiagnostics: (lease: Pick<DesktopLease, 'username' | 'subnetCidr'>) => Promise<DesktopLeaseStatus>
       configureGameFirewall: (gamePath: string) => Promise<void>
       desktopStatus: () => Promise<DesktopStatus>
       prepareDesktop: () => Promise<DesktopStatus>

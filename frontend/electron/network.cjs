@@ -1,7 +1,7 @@
 const os = require('node:os')
 const { spawn } = require('node:child_process')
 
-const CONFLICTING_ADAPTER_PATTERN = /tap-windows|tap adapter|openvpn|zerotier|radmin vpn|hamachi|gateway nc adapter|softether vpn client adapter/i
+const CONFLICTING_ADAPTER_PATTERN = /tap-windows|tap adapter|openvpn|zerotier|radmin vpn|hamachi|gateway nc adapter|vpn client adapter/i
 
 function decodeProcessOutput(chunks) {
   const buffer = Buffer.concat(chunks)

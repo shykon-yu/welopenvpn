@@ -12,6 +12,11 @@ test('uses OpenVPN-safe paths in generated config values', () => {
   )
 })
 
+test('sends explicit exit notify to shrink stale UDP sessions on reconnect', () => {
+  const client = fs.readFileSync(path.join(__dirname, 'openvpn.cjs'), 'utf8')
+  assert.match(client, /'explicit-exit-notify 1'/)
+})
+
 test('keeps client and server cipher settings aligned', () => {
   const generator = fs.readFileSync(path.join(__dirname, '..', '..', 'deploy', 'openvpn', 'generate-room-configs.sh'), 'utf8')
   assert.match(generator, new RegExp(`data-ciphers ${OPENVPN_DATA_CIPHERS.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`))
@@ -42,8 +47,8 @@ test('detects OpenVPN network configuration progress before final ready line', (
 })
 
 test('retries transient OpenVPN handshake timeouts only', () => {
-  assert.equal(CONNECT_TIMEOUT_MS, 30000)
-  assert.equal(CONNECT_MAX_ATTEMPTS, 3)
+  assert.equal(CONNECT_TIMEOUT_MS, 45000)
+  assert.equal(CONNECT_MAX_ATTEMPTS, 4)
   assert.equal(isRetryableConnectError(new Error('OpenVPN 连接失败：连接超时：未收到 OpenVPN 初始化完成信号')), true)
   assert.equal(isRetryableConnectError(new Error('OpenVPN 进程提前退出（代码 1）')), false)
 })

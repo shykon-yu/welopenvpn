@@ -19,7 +19,7 @@ test('finds the real room address from operating system interfaces', () => {
 test('reports stale gateway and enabled conflicting adapters', () => {
   const status = analyzeNetwork('10.80.3.0/24', { name: 'VPN', address: '10.80.3.11' }, [
     {
-      description: 'SoftEther VPN Client Adapter - VPN', ipEnabled: true,
+      description: 'WEL TAP', ipEnabled: true,
       interfaceIndex: 18, interfaceMetric: 25,
       ipAddresses: ['10.80.3.11'], subnets: ['255.255.255.0'],
       defaultGateways: ['10.80.3.1'], dnsServers: ['10.80.3.1'],
@@ -49,10 +49,10 @@ test('reports stale gateway and enabled conflicting adapters', () => {
 
 test('parses base64 encoded PowerShell adapter fields', () => {
   const encode = (value) => Buffer.from(value, 'utf8').toString('base64')
-  const output = `${encode('SoftEther VPN Client Adapter - VPN')}|True|18|25|${encode('10.80.1.10')}|${encode('255.255.255.0')}||\n`
+  const output = `${encode('WEL TAP')}|True|18|25|${encode('10.80.1.10')}|${encode('255.255.255.0')}||\n`
   const adapters = parseAdapterOutput(output)
   assert.equal(adapters.length, 1)
-  assert.equal(adapters[0].description, 'SoftEther VPN Client Adapter - VPN')
+  assert.equal(adapters[0].description, 'WEL TAP')
   assert.equal(adapters[0].interfaceIndex, 18)
   assert.equal(adapters[0].interfaceMetric, 25)
   assert.deepEqual(adapters[0].defaultGateways, [])

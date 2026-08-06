@@ -2,15 +2,15 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const { spawn } = require('node:child_process')
-const { prioritizeVpnNetwork, waitForVpnNetwork } = require('./network.cjs')
+const { prioritizeVpnNetwork, runPowerShell, waitForVpnNetwork } = require('./network.cjs')
 
 const DEFAULT_HOST = '8.133.189.9'
 const DEFAULT_PORT = 12001
 const TAP_NAME = 'WEL TAP'
 const OPENVPN_READY = /Initialization Sequence Completed/i
 const OPENVPN_PROGRESS = /(?:PUSH_REPLY|open_tun|tap-windows6 device \[.+?\] opened|Successful ARP Flush)/i
-const CONNECT_TIMEOUT_MS = 30000
-const CONNECT_MAX_ATTEMPTS = 3
+const CONNECT_TIMEOUT_MS = 45000
+const CONNECT_MAX_ATTEMPTS = 4
 const OPENVPN_DATA_CIPHERS = 'AES-256-GCM:AES-128-GCM:AES-256-CBC'
 const OPENVPN_FALLBACK_CIPHER = 'AES-256-CBC'
 const OPENVPN_REMOTE_CERT_EKU = 'TLS Web Server Authentication'
@@ -86,6 +86,7 @@ function buildConfig({ host, port, username, token, roomID, subnetCidr }) {
     'dev tap',
     `dev-node "${TAP_NAME}"`,
     'proto udp4',
+    'explicit-exit-notify 1',
     `remote ${host} ${port}`,
     'nobind',
     'persist-key',
@@ -143,6 +144,19 @@ function wait(ms) {
 
 function isRetryableConnectError(error) {
   return /连接超时：未收到 OpenVPN 初始化完成信号/.test(String(error?.message || error || ''))
+}
+
+async function stopStaleWelOpenVpnProcesses() {
+  if (process.platform !== 'win32') return
+  try {
+    await runPowerShell(`
+Get-WmiObject Win32_Process -Filter "Name = 'openvpn.exe'" |
+  Where-Object { $_.CommandLine -like '*WELPlatform*' } |
+  ForEach-Object { try { $_.Terminate() | Out-Null } catch {} }
+`, 5000)
+  } catch {
+    // Best effort only. A normal connection attempt can still proceed.
+  }
 }
 
 async function connectAttempt({ executable, host, port, roomID, username, token, subnetCidr }) {
@@ -203,6 +217,9 @@ async function connect({ host, port, roomID, username, token, subnetCidr }) {
   const executable = locateOpenVpn()
   if (!executable) throw new Error('未检测到 OpenVPN 运行组件，请重新运行完整安装包')
   if (!token || !username || !roomID || !subnetCidr) throw new Error('OpenVPN 房间凭据不完整')
+
+  stopConnection()
+  await stopStaleWelOpenVpnProcesses()
 
   let lastError = null
   for (let attempt = 1; attempt <= CONNECT_MAX_ATTEMPTS; attempt += 1) {
