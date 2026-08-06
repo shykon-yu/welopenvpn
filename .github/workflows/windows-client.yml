@@ -23,18 +23,19 @@ jobs:
       - name: Build frontend
         run: npm run build
       - name: Check release runtime
-        id: runtime
         shell: pwsh
         run: |
-          $ready = (Test-Path 'build/OpenVPN-2.5.10-I601-amd64.msi') -and (Test-Path 'resources/openvpn/ca.crt')
-          "ready=$($ready.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          $missing = @()
+          if (-not (Test-Path 'build/OpenVPN-2.5.10-I601-amd64.msi')) { $missing += 'build/OpenVPN-2.5.10-I601-amd64.msi' }
+          if (-not (Test-Path 'resources/openvpn/ca.crt')) { $missing += 'resources/openvpn/ca.crt' }
+          if ($missing.Count -gt 0) {
+            throw "缺少安装包运行时文件，无法生成 Windows 安装包: $($missing -join ', ')"
+          }
       - name: Build NSIS installer
-        if: steps.runtime.outputs.ready == 'true'
         run: npx electron-builder --win nsis
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
       - name: Upload installer
-        if: steps.runtime.outputs.ready == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: wel-windows-win7-nsis
