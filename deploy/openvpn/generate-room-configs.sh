@@ -31,6 +31,7 @@ setenv WEL_API_BASE_URL ${api_base}
 
 # A dedicated layer-2 broadcast domain for this WE8 room. No redirect-gateway
 # or DNS options are pushed, so ordinary Internet traffic stays local.
+ifconfig ${subnet}.1 255.255.255.0
 server-bridge ${subnet}.1 255.255.255.0 ${subnet}.10 ${subnet}.109
 client-to-client
 keepalive 5 20
