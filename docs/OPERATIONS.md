@@ -289,47 +289,7 @@ sudo ufw reload
 sudo ss -lntup
 ```
 
-## 7. 更新备用下载文件
-
-客户端备用地址约定为：
-
-```text
-http://8.133.189.9:1421/downloads/welopenvpn/latest.json
-http://8.133.189.9:1421/downloads/welopenvpn/WEL-Platform-Setup-<version>.exe
-```
-
-`platform-web` 容器把宿主机目录挂载到 Nginx 静态目录：
-
-```bash
-sudo mkdir -p /srv/we8-project/downloads/welopenvpn
-```
-
-上传文件示例：
-
-```bash
-scp latest.json root@8.133.189.9:/srv/we8-project/downloads/welopenvpn/
-scp WEL-Platform-Setup-0.1.31.exe root@8.133.189.9:/srv/we8-project/downloads/welopenvpn/
-```
-
-检查 HTTP 是否可读：
-
-```bash
-curl -I http://8.133.189.9:1421/downloads/welopenvpn/latest.json
-curl -sS http://8.133.189.9:1421/downloads/welopenvpn/latest.json
-```
-
-服务器 `latest.json` 至少包含：
-
-```json
-{
-  "version": "0.1.31",
-  "notes": "WEL职业联盟对战平台 v0.1.31",
-  "githubUrl": "https://github.com/shykon-yu/welopenvpn/releases/download/windows-client-latest/WEL-Platform-Setup-0.1.31.exe",
-  "serverUrl": "http://8.133.189.9:1421/downloads/welopenvpn/WEL-Platform-Setup-0.1.31.exe"
-}
-```
-
-## 8. 常见恢复顺序
+## 7. 常见恢复顺序
 
 ### API 登录失败
 
@@ -378,7 +338,7 @@ sudo journalctl -u welopenvpn@<room> -n 100 --no-pager
 
 重启服务器前要确认当前没有正在进行的比赛。
 
-## 9. 安全注意事项
+## 8. 安全注意事项
 
 - 不要把 `server.key`、数据库密码、JWT 密钥提交 Git。
 - 不要把包含密码的 `welopenvpn.env` 发到群里。

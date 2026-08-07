@@ -37,7 +37,6 @@ welopenvpn/
 │   │   ├── openvpn.cjs
 │   │   ├── network.cjs
 │   │   ├── firewall.cjs
-│   │   └── updater.cjs
 │   ├── src/
 │   │   ├── App.vue
 │   │   ├── api.ts
@@ -206,47 +205,7 @@ welopenvpn@6.service
 ifconfig-push 10.80.<room>.<host> 255.255.255.0
 ```
 
-## 7. 客户端自动更新
-
-客户端启动约 5 秒后静默检查更新，也可以通过菜单：
-
-```text
-帮助 -> 检查更新
-```
-
-更新地址：
-
-```text
-GitHub:
-https://github.com/shykon-yu/welopenvpn/releases/download/windows-client-latest/latest.json
-
-服务器备用:
-http://8.133.189.9:1421/downloads/welopenvpn/latest.json
-```
-
-下载顺序：
-
-1. 读取 GitHub `latest.json`。
-2. 读取其中的 GitHub 安装包地址。
-3. GitHub 下载失败后，读取其中的服务器安装包地址。
-4. 下载完成后运行 NSIS 安装包，退出旧客户端。
-
-GitHub Actions 每次构建会：
-
-1. 执行测试。
-2. 构建 Windows NSIS 安装包。
-3. 复制成 ASCII 文件名 `WEL-Platform-Setup-<version>.exe`。
-4. 生成 `latest.json`。
-5. 更新固定 Release `windows-client-latest`。
-
-备用服务器下载需要把同一份 ASCII 安装包和 `latest.json` 放到服务器：
-
-```text
-/downloads/welopenvpn/WEL-Platform-Setup-<version>.exe
-/downloads/welopenvpn/latest.json
-```
-
-## 8. 修改代码后的发布流程
+## 7. 修改代码后的发布流程
 
 1. 修改代码。
 2. 本地运行：
@@ -267,7 +226,7 @@ GitHub Actions 每次构建会：
    ```
 
 5. 查看 GitHub Actions。
-6. 构建成功后，测试新安装包和更新菜单。
+6. 构建成功后，从 Actions 构建产物下载并测试新安装包。
 
 不要把未验证的安装包直接给玩家，尤其要验证：
 
