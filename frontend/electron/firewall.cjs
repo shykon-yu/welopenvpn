@@ -2,6 +2,7 @@ const { runPowerShell } = require('./network.cjs')
 
 const INBOUND_RULE = 'WEL WE8 Game Inbound'
 const OUTBOUND_RULE = 'WEL WE8 Game Outbound'
+const BROADCAST_OUTBOUND_RULE = 'WEL WE8 Game Broadcast Outbound'
 
 function powerShellLiteral(value) {
   return `'${String(value).replace(/'/g, "''")}'`
@@ -14,11 +15,15 @@ $netsh = Join-Path $env:SystemRoot 'System32\\netsh.exe'
 
 & $netsh advfirewall firewall delete rule "name=${INBOUND_RULE}" | Out-Null
 & $netsh advfirewall firewall delete rule "name=${OUTBOUND_RULE}" | Out-Null
+& $netsh advfirewall firewall delete rule "name=${BROADCAST_OUTBOUND_RULE}" | Out-Null
 
 & $netsh advfirewall firewall add rule "name=${INBOUND_RULE}" "dir=in" "action=allow" "program=$program" "enable=yes" "profile=any" "remoteip=10.80.0.0/16" "protocol=any" | Out-Null
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 & $netsh advfirewall firewall add rule "name=${OUTBOUND_RULE}" "dir=out" "action=allow" "program=$program" "enable=yes" "profile=any" "remoteip=10.80.0.0/16" "protocol=any" | Out-Null
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+& $netsh advfirewall firewall add rule "name=${BROADCAST_OUTBOUND_RULE}" "dir=out" "action=allow" "program=$program" "enable=yes" "profile=any" "remoteip=255.255.255.255" "protocol=any" | Out-Null
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 `
 }
