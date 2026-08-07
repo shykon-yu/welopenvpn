@@ -138,7 +138,7 @@ async function listTapAdapters(tapctl) {
 }
 
 async function ensureAsciiTapName(adapter) {
-  if (!adapter || adapter.name === TAP_NAME) return adapter
+  if (!adapter) return adapter
   const guid = adapter.guid
   const bareGuid = guid.replace(/[{}]/g, '')
   try {
@@ -148,6 +148,13 @@ $adapter = Get-WmiObject Win32_NetworkAdapter -ErrorAction SilentlyContinue |
   Where-Object { $_.GUID -and $_.GUID.Trim('{}') -ieq $guid } |
   Select-Object -First 1
 if ($null -eq $adapter) { exit 2 }
+$enabled = $adapter.NetEnabled
+if ($enabled -ne $true) {
+  $result = $adapter.Enable()
+  $returnValue = [int]$result.ReturnValue
+  if (@(0, 1) -notcontains $returnValue) { exit 4 }
+  Start-Sleep -Milliseconds 500
+}
 $connectionKey = "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Network\\{4d36e972-e325-11ce-bfc1-08002be10318}\\{$guid}\\Connection"
 if (-not (Test-Path -LiteralPath $connectionKey)) { exit 3 }
 Set-ItemProperty -LiteralPath $connectionKey -Name 'Name' -Value '${TAP_NAME}' -ErrorAction Stop
@@ -174,7 +181,7 @@ async function prepare() {
   if (adapter) {
     adapter = await ensureAsciiTapName(adapter)
     rememberTapAdapter(adapter)
-    return { ...current, adapterReady: true, tapName: adapter.name, tapNode: adapter.name }
+    return { ...current, adapterReady: true, tapName: adapter.name, tapNode: adapter.name, tapGuid: adapter.guid }
   }
 
   const createOutput = await runTapctl(tapctl, ['create', '--hwid', 'root\\tap0901', '--name', TAP_NAME], 20000)
@@ -186,7 +193,7 @@ async function prepare() {
     if (adapter) {
       adapter = await ensureAsciiTapName(adapter)
       rememberTapAdapter(adapter)
-      return { ...current, adapterReady: true, tapName: adapter.name, tapNode: adapter.name }
+      return { ...current, adapterReady: true, tapName: adapter.name, tapNode: adapter.name, tapGuid: adapter.guid }
     }
     await wait(500)
   }
@@ -370,6 +377,18 @@ function isRetryableConnectError(error) {
   return /连接超时：未收到 OpenVPN 初始化完成信号|CreateFile failed on tap-windows6 device|Failed to open tap-windows6 adapter/i.test(String(error?.message || error || ''))
 }
 
+function isTapOpenError(error) {
+  return /CreateFile failed on tap-windows6 device|Failed to open tap-windows6 adapter/i.test(String(error?.message || error || ''))
+}
+
+async function recreateWelTapAdapter(prepared) {
+  if (process.platform !== 'win32' || !prepared?.tapGuid) return
+  const tapctl = locateTapctl()
+  if (!tapctl) return
+  try { await runTapctl(tapctl, ['delete', prepared.tapGuid], 20000) } catch {}
+  await wait(500)
+}
+
 async function stopStaleWelOpenVpnProcesses() {
   if (process.platform !== 'win32') return
   try {
@@ -452,7 +471,7 @@ async function connect({ host, port, roomID, username, token, subnetCidr }) {
   await stopConnection()
   await stopStaleWelOpenVpnProcesses()
   await wait(500)
-  const prepared = await prepare()
+  let prepared = await prepare()
 
   let lastError = null
   for (let attempt = 1; attempt <= CONNECT_MAX_ATTEMPTS; attempt += 1) {
@@ -461,6 +480,10 @@ async function connect({ host, port, roomID, username, token, subnetCidr }) {
     } catch (error) {
       lastError = error
       if (attempt >= CONNECT_MAX_ATTEMPTS || !isRetryableConnectError(error)) throw error
+      if (isTapOpenError(error)) {
+        await recreateWelTapAdapter(prepared)
+        prepared = await prepare()
+      }
       await wait(attempt * 1200)
     }
   }
