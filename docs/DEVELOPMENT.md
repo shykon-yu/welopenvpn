@@ -30,7 +30,7 @@ welopenvpn/
 │   │   ├── installer.nsh
 │   │   ├── ensure-wel-tap.ps1
 │   │   ├── remove-wel-tap.ps1
-│   │   └── OpenVPN-2.5.10-I601-amd64.msi
+│   │   └── tap-windows-9.24.6/x64/
 │   ├── electron/
 │   │   ├── main.cjs
 │   │   ├── preload.cjs
@@ -42,7 +42,7 @@ welopenvpn/
 │   │   ├── App.vue
 │   │   ├── api.ts
 │   │   └── electron.d.ts
-│   ├── resources/openvpn/
+│   ├── resources/openvpn/bin/
 │   ├── package.json
 │   └── release/
 └── docs/
@@ -110,7 +110,8 @@ npm run electron:build
 
 Windows 构建必须包含：
 
-- `frontend/build/OpenVPN-2.5.10-I601-amd64.msi`
+- `frontend/resources/openvpn/bin/openvpn.exe` 及其依赖 DLL
+- `frontend/build/tap-windows-9.24.6/x64/` 下的签名 TAP 驱动
 - `frontend/resources/openvpn/ca.crt`
 
 不要把 `server.key`、CA 私钥或其他服务端密钥放入仓库。
@@ -162,7 +163,7 @@ WE8 使用老式 DirectPlay 广播发现主机。Radmin、ZeroTier、其他 TAP/
 
 ### 5.4 TAP 网卡命名
 
-安装器会删除旧的 `WEL TAP`、`WEL TAP 2` 到 `WEL TAP 50`，并尝试把新连接名固定为 `WEL TAP`。
+安装器会复用已有的 `WEL TAP`，清理重复的编号连接，并把新连接名固定为 `WEL TAP`。OpenVPN 运行文件由客户端直接携带，Windows 中只安装 TAP 驱动，不安装完整 OpenVPN、GUI 或 Wintun。
 
 相关脚本：
 
@@ -275,4 +276,3 @@ GitHub Actions 每次构建会：
 - 已安装其他虚拟网卡的电脑。
 - 覆盖安装和卸载后重新安装。
 - 进入/退出房间和重启客户端后的状态。
-

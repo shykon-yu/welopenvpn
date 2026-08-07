@@ -35,6 +35,7 @@ DNS server.
 
 ## Release resources
 
-The Windows installer uses the official OpenVPN 2.5.10 I601 x64 MSI committed
-under `frontend/build/`. Copy only the public `ca.crt` into
-`frontend/resources/openvpn/`. Never commit the server private key.
+The Windows client bundles the official OpenVPN 2.5.10 I601 x64 runtime under
+`frontend/resources/openvpn/bin/` and installs only the signed TAP-Windows
+driver under `frontend/build/tap-windows-9.24.6/`. Keep only the public
+`ca.crt` in client resources. Never commit the server private key.

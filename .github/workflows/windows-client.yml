@@ -23,14 +23,39 @@ jobs:
         run: npm install --legacy-peer-deps --ignore-scripts
       - name: Test Electron helpers
         run: npm run test:electron
+      - name: Check Windows PowerShell scripts
+        shell: pwsh
+        run: |
+          $failed = $false
+          Get-ChildItem build -Filter '*.ps1' | ForEach-Object {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $failed = $true
+              Write-Error "$($_.Name): $($errors -join '; ')"
+            }
+          }
+          if ($failed) { throw 'Windows PowerShell 脚本语法检查失败' }
       - name: Build frontend
         run: npm run build
       - name: Check release runtime
         shell: pwsh
         run: |
-          $missing = @()
-          if (-not (Test-Path 'build/OpenVPN-2.5.10-I601-amd64.msi')) { $missing += 'build/OpenVPN-2.5.10-I601-amd64.msi' }
-          if (-not (Test-Path 'resources/openvpn/ca.crt')) { $missing += 'resources/openvpn/ca.crt' }
+          $required = @(
+            'resources/openvpn/bin/openvpn.exe',
+            'resources/openvpn/bin/libcrypto-1_1-x64.dll',
+            'resources/openvpn/bin/libssl-1_1-x64.dll',
+            'resources/openvpn/bin/libpkcs11-helper-1.dll',
+            'resources/openvpn/bin/vcruntime140.dll',
+            'resources/openvpn/bin/tapctl.exe',
+            'resources/openvpn/ca.crt',
+            'build/tap-windows-9.24.6/x64/OemVista.inf',
+            'build/tap-windows-9.24.6/x64/tap0901.cat',
+            'build/tap-windows-9.24.6/x64/tap0901.sys',
+            'build/tap-windows-9.24.6/x64/tapinstall.exe'
+          )
+          $missing = @($required | Where-Object { -not (Test-Path $_) })
           if ($missing.Count -gt 0) {
             throw "缺少安装包运行时文件，无法生成 Windows 安装包: $($missing -join ', ')"
           }

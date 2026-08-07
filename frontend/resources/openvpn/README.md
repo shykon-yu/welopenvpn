@@ -1,10 +1,11 @@
 # WEL OpenVPN Runtime
 
-Release builds include the official Win7-compatible OpenVPN 2.5.10 I601 x64
-MSI from `frontend/build/`. The public server CA certificate is stored here as
-`ca.crt` and copied into the installed application's resources directory.
+Release builds bundle the OpenVPN 2.5.10 I601 x64 runtime files directly in
+`bin/`. The installer does not register the full OpenVPN MSI, GUI, service or
+Wintun driver. It installs only the standalone TAP-Windows driver from
+`frontend/build/tap-windows-9.24.6/`.
 
-Official MSI SHA-256:
-`ddcac52d40c5a76fa0d4436accd4c91543ce044974661fd683612aefa0de654a`.
+The public server CA certificate is stored as `ca.crt`. OpenVPN redistribution
+terms are included in `LICENSE-OpenVPN.txt`.
 
 Never place server private keys in the repository.

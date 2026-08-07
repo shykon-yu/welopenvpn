@@ -1,11 +1,17 @@
 param(
   [Parameter(Mandatory = $true)]
-  [string]$TapctlPath
+  [string]$TapctlPath,
+  [Parameter(Mandatory = $true)]
+  [string]$TapInstallPath,
+  [Parameter(Mandatory = $true)]
+  [string]$DriverInfPath
 )
 
 $ErrorActionPreference = 'SilentlyContinue'
 
-if (-not (Test-Path -LiteralPath $TapctlPath)) {
+if (-not (Test-Path -LiteralPath $TapctlPath) -or
+    -not (Test-Path -LiteralPath $TapInstallPath) -or
+    -not (Test-Path -LiteralPath $DriverInfPath)) {
   exit 2
 }
 
@@ -69,28 +75,58 @@ $officialAdapter = $tapAdapters |
   Where-Object { $_.NetConnectionID -match '^OpenVPN TAP-Windows6( \d+)?$' } |
   Select-Object -First 1
 
-# A fresh TAP-only MSI install creates this adapter. On Windows 7, adopting it
-# is more reliable than deleting it and asking SetupAPI to create it again.
+# Older WEL releases created this adapter through the official OpenVPN MSI.
 if ($null -ne $officialAdapter -and (Set-TapConnectionName -Adapter $officialAdapter -Name 'WEL TAP')) {
   exit 0
 }
 
-# If this is the only TAP adapter on the machine, it belongs to this clean
-# install even when Windows assigned a localized connection name.
-if ($tapAdapters.Count -eq 1 -and (Set-TapConnectionName -Adapter $tapAdapters[0] -Name 'WEL TAP')) {
-  exit 0
-}
-
+# Reuse an already installed tap0901 driver without changing its version.
 & $TapctlPath create --hwid 'root\tap0901' --name 'WEL TAP' | Out-Null
 $createExitCode = $LASTEXITCODE
+if ($createExitCode -eq 0) {
+  for ($attempt = 1; $attempt -le 20; $attempt++) {
+    $createdAdapter = Get-TapAdapters |
+      Where-Object { $_.NetConnectionID -eq 'WEL TAP' } |
+      Select-Object -First 1
+    if ($null -ne $createdAdapter) {
+      exit 0
+    }
+    Start-Sleep -Milliseconds 500
+  }
+}
 
-if ($createExitCode -ne 0) {
-  $createdAdapter = Get-TapAdapters |
+# No compatible driver is installed. Install the proven TAP-Windows
+# 9.24.6.601 package directly, matching the mature Win7 client approach.
+$existingGuids = @($tapAdapters |
+  Where-Object { -not [string]::IsNullOrEmpty($_.GUID) } |
+  ForEach-Object { $_.GUID })
+
+& $TapInstallPath install $DriverInfPath 'tap0901' | Out-Null
+$driverExitCode = $LASTEXITCODE
+if ($driverExitCode -ne 0 -and $driverExitCode -ne 1) {
+  exit $driverExitCode
+}
+
+for ($attempt = 1; $attempt -le 40; $attempt++) {
+  $currentAdapters = @(Get-TapAdapters)
+  $createdAdapter = $currentAdapters |
     Where-Object { $_.NetConnectionID -eq 'WEL TAP' } |
     Select-Object -First 1
   if ($null -ne $createdAdapter) {
     exit 0
   }
+
+  $createdAdapter = $currentAdapters |
+    Where-Object {
+      -not [string]::IsNullOrEmpty($_.GUID) -and
+      $existingGuids -notcontains $_.GUID
+    } |
+    Select-Object -First 1
+  if ($null -ne $createdAdapter -and (Set-TapConnectionName -Adapter $createdAdapter -Name 'WEL TAP')) {
+    exit 0
+  }
+
+  Start-Sleep -Milliseconds 500
 }
 
-exit $createExitCode
+exit 4

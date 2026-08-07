@@ -19,7 +19,8 @@ instance; the server verifies that token against the active room lease.
 ## Current milestone
 
 The application connection lifecycle and server configuration are implemented.
-Windows packaging uses the official OpenVPN 2.5.10 I601 x64 MSI and the public
-server CA certificate. The WEL installer silently installs the shared OpenVPN
-runtime when absent, then creates only the dedicated `WEL TAP` adapter. Private
+Windows packaging bundles the official OpenVPN 2.5.10 I601 x64 runtime and
+the public server CA directly in the client. The WEL installer installs only
+the signed TAP-Windows 9.24.6.601 driver and creates the dedicated `WEL TAP`
+adapter; it does not register the full OpenVPN package, GUI or Wintun. Private
 server keys are never committed.

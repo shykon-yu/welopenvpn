@@ -1,28 +1,25 @@
 !macro customInstall
   SetOutPath "$PLUGINSDIR"
-  File /oname=wel-openvpn.msi "${BUILD_RESOURCES_DIR}\OpenVPN-2.5.10-I601-amd64.msi"
   File /oname=ensure-wel-tap.ps1 "${BUILD_RESOURCES_DIR}\ensure-wel-tap.ps1"
   File /oname=remove-wel-tap.ps1 "${BUILD_RESOURCES_DIR}\remove-wel-tap.ps1"
   File /oname=cleanup-openvpn-gui.ps1 "${BUILD_RESOURCES_DIR}\cleanup-openvpn-gui.ps1"
+  File /oname=OemVista.inf "${BUILD_RESOURCES_DIR}\tap-windows-9.24.6\x64\OemVista.inf"
+  File /oname=tap0901.cat "${BUILD_RESOURCES_DIR}\tap-windows-9.24.6\x64\tap0901.cat"
+  File /oname=tap0901.sys "${BUILD_RESOURCES_DIR}\tap-windows-9.24.6\x64\tap0901.sys"
+  File /oname=tapinstall.exe "${BUILD_RESOURCES_DIR}\tap-windows-9.24.6\x64\tapinstall.exe"
 
-  IfFileExists "$PROGRAMFILES64\OpenVPN\bin\openvpn.exe" 0 install_openvpn
-  IfFileExists "$PROGRAMFILES64\OpenVPN\bin\tapctl.exe" openvpn_ready
+  ; OpenVPN runs directly from the application resources directory. Only the
+  ; signed TAP-Windows driver is installed into Windows.
+  IfFileExists "$INSTDIR\resources\openvpn\bin\openvpn.exe" 0 runtime_missing
+  IfFileExists "$INSTDIR\resources\openvpn\bin\tapctl.exe" runtime_ready
 
-install_openvpn:
-  DetailPrint "正在安装 WEL 联机组件..."
-  ; Install only the OpenVPN runtime and the layer-2 TAP driver used by WE8.
-  ; Leaving Wintun and the OpenVPN GUI out also avoids unused adapters and
-  ; startup entries. The MSI creates the first TAP adapter so Windows 7 does
-  ; not need an immediate driver-backed delete/recreate cycle.
-  nsExec::ExecToLog '"$SYSDIR\msiexec.exe" /i "$PLUGINSDIR\wel-openvpn.msi" /qn /norestart ADDLOCAL=OpenVPN,Drivers,Drivers.TAPWindows6'
-  Pop $0
-  StrCmp $0 "0" openvpn_ready
-  MessageBox MB_ICONSTOP|MB_OK "WEL 联机组件安装失败（错误代码：$0），请重新运行安装包并同意管理员授权。"
+runtime_missing:
+  MessageBox MB_ICONSTOP|MB_OK "WEL 联机运行文件不完整，请重新下载安装包。"
   Abort
 
-openvpn_ready:
-  ; The bundled OpenVPN GUI is not used by WEL. Keep only the WEL shortcuts
-  ; and prevent its empty-config warning from appearing after reboot.
+runtime_ready:
+  ; Clean startup entries left by older WEL releases that installed the full
+  ; OpenVPN MSI. New releases do not install OpenVPN GUI at all.
   nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /F /IM openvpn-gui.exe'
   Pop $3
   IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 cleanup_gui_system32
@@ -58,16 +55,11 @@ cleanup_gui_done:
   SetRegView lastused
   SetShellVarContext all
 
-  IfFileExists "$PROGRAMFILES64\OpenVPN\bin\tapctl.exe" 0 tapctl_missing
   DetailPrint "正在准备 WEL 虚拟网卡..."
-  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\ensure-wel-tap.ps1" -TapctlPath "$PROGRAMFILES64\OpenVPN\bin\tapctl.exe"'
+  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\ensure-wel-tap.ps1" -TapctlPath "$INSTDIR\resources\openvpn\bin\tapctl.exe" -TapInstallPath "$PLUGINSDIR\tapinstall.exe" -DriverInfPath "$PLUGINSDIR\OemVista.inf"'
   Pop $2
   StrCmp $2 "0" tap_ready
-  MessageBox MB_ICONSTOP|MB_OK "WEL 虚拟网卡准备失败（错误代码：$2）。请重新运行安装包并同意驱动安装；Windows 7 还需要系统已安装 SHA-2 驱动签名更新。"
-  Abort
-
-tapctl_missing:
-  MessageBox MB_ICONSTOP|MB_OK "WEL 联机组件文件不完整，请重新安装。"
+  MessageBox MB_ICONSTOP|MB_OK "WEL 虚拟网卡准备失败（错误代码：$2）。请重新运行安装包并同意驱动安装；Windows 7 需要 SP1 和 SHA-2 驱动签名更新。"
   Abort
 
 tap_ready:
@@ -87,6 +79,7 @@ firewall_ready:
   SetOutPath "$PLUGINSDIR"
   File /oname=remove-wel-tap.ps1 "${BUILD_RESOURCES_DIR}\remove-wel-tap.ps1"
   File /oname=cleanup-openvpn-gui.ps1 "${BUILD_RESOURCES_DIR}\cleanup-openvpn-gui.ps1"
+  File /oname=wel-tapctl.exe "${BUILD_RESOURCES_DIR}\..\resources\openvpn\bin\tapctl.exe"
   nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /F /IM openvpn-gui.exe'
   Pop $2
   IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 uninstall_cleanup_gui_system32
@@ -97,7 +90,7 @@ uninstall_cleanup_gui_system32:
   nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\cleanup-openvpn-gui.ps1"'
   Pop $3
 uninstall_cleanup_gui_done:
-  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\remove-wel-tap.ps1" -TapctlPath "$PROGRAMFILES64\OpenVPN\bin\tapctl.exe"'
+  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\remove-wel-tap.ps1" -TapctlPath "$PLUGINSDIR\wel-tapctl.exe"'
   Pop $1
   nsExec::ExecToLog '"$SYSDIR\netsh.exe" advfirewall firewall delete rule name="WEL WE8 Virtual LAN ICMPv4"'
   Pop $0

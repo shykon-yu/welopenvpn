@@ -3,6 +3,5 @@ frontend/node_modules/
 frontend/package-lock.json
 frontend/dist/
 frontend/release/
-frontend/resources/openvpn/bin/
 frontend/resources/openvpn/driver/
 *.log
