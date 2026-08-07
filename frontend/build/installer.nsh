@@ -69,7 +69,15 @@ cleanup_gui_done:
   SetRegView lastused
   SetShellVarContext all
 
-  Call hide_tap_entry
+  IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 hide_existing_tap_system32
+  nsExec::ExecToLog '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\hide-tap-windows.ps1" -StatePath "$APPDATA\WELPlatform\tap-arp-state.txt"'
+  Pop $5
+  Goto hide_existing_tap_done
+hide_existing_tap_system32:
+  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\hide-tap-windows.ps1" -StatePath "$APPDATA\WELPlatform\tap-arp-state.txt"'
+  Pop $5
+hide_existing_tap_done:
+  Goto prepare_tap
 
 prepare_tap:
   DetailPrint "正在准备 WEL 虚拟网卡..."
@@ -110,23 +118,17 @@ install_tap_driver:
   Abort
 
 tap_driver_installed:
-  Call hide_tap_entry
+  IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 hide_new_tap_system32
+  nsExec::ExecToLog '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\hide-tap-windows.ps1" -StatePath "$APPDATA\WELPlatform\tap-arp-state.txt"'
+  Pop $5
+  Goto hide_new_tap_done
+hide_new_tap_system32:
+  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\hide-tap-windows.ps1" -StatePath "$APPDATA\WELPlatform\tap-arp-state.txt"'
+  Pop $5
+hide_new_tap_done:
   ; The standalone TAP package creates its own adapter. Remember that adapter
   ; instead of creating a second device with tapctl.
   Goto remember_installed_tap
-
-hide_tap_entry:
-  ; The standalone package registers itself in Programs and Features. Hide
-  ; that entry so the only visible product remains WEL.
-  IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 hide_tap_system32
-  nsExec::ExecToLog '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\hide-tap-windows.ps1" -StatePath "$APPDATA\WELPlatform\tap-arp-state.txt"'
-  Pop $5
-  Goto hide_tap_return
-hide_tap_system32:
-  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\hide-tap-windows.ps1" -StatePath "$APPDATA\WELPlatform\tap-arp-state.txt"'
-  Pop $5
-hide_tap_return:
-  Return
 
 remember_installed_tap:
   IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 remember_tap_system32
