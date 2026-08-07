@@ -89,6 +89,8 @@ test('keeps and dynamically selects the actual adapter name before connecting', 
   assert.match(client, /`dev-node "\$\{tapNode\}"`/)
   assert.match(client, /tapNode: adapter\.name/)
   assert.doesNotMatch(client, /tapNode: adapter\.guid/)
+  assert.match(client, /ensureAsciiTapName/)
+  assert.match(client, /WEL TAP/)
   assert.match(client, /readRememberedTapGuid\(\)/)
   assert.match(client, /INSTALLER_TAP_STATE_PATH/)
   assert.match(client, /stopStaleWelOpenVpnProcesses/)

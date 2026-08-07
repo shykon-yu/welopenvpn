@@ -6,7 +6,7 @@ const { prioritizeVpnNetwork, runPowerShell, waitForVpnNetwork } = require('./ne
 
 const DEFAULT_HOST = '8.133.189.9'
 const DEFAULT_PORT = 12001
-const TAP_NAME = 'WEL Virtual LAN'
+const TAP_NAME = 'WEL TAP'
 const WEL_TAP_NAME = /^(?:WEL Virtual LAN|WEL TAP)(?: \d+)?$/i
 const OPENVPN_READY = /Initialization Sequence Completed/i
 const OPENVPN_PROGRESS = /(?:PUSH_REPLY|open_tun|tap-windows6 device \[.+?\] opened|Successful ARP Flush)/i
@@ -137,6 +137,27 @@ async function listTapAdapters(tapctl) {
   return parseTapctlList(await runTapctl(tapctl, ['list']))
 }
 
+async function ensureAsciiTapName(adapter) {
+  if (!adapter || adapter.name === TAP_NAME) return adapter
+  const guid = adapter.guid
+  const bareGuid = guid.replace(/[{}]/g, '')
+  try {
+    await runPowerShell(`
+$guid = '${bareGuid}'
+$adapter = Get-WmiObject Win32_NetworkAdapter -ErrorAction SilentlyContinue |
+  Where-Object { $_.GUID -and $_.GUID.Trim('{}') -ieq $guid } |
+  Select-Object -First 1
+if ($null -eq $adapter) { exit 2 }
+$connectionKey = "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Network\\{4d36e972-e325-11ce-bfc1-08002be10318}\\{$guid}\\Connection"
+if (-not (Test-Path -LiteralPath $connectionKey)) { exit 3 }
+Set-ItemProperty -LiteralPath $connectionKey -Name 'Name' -Value '${TAP_NAME}' -ErrorAction Stop
+`, 6000)
+    return { ...adapter, name: TAP_NAME }
+  } catch {
+    throw new Error('WEL 虚拟网卡名称无法设置为 WEL TAP，请重新运行安装包并同意管理员授权')
+  }
+}
+
 async function prepare() {
   const current = status()
   if (!current.ready) throw new Error(current.message)
@@ -151,6 +172,7 @@ async function prepare() {
     ? adapters.find(({ guid }) => guid.toLowerCase() === rememberedGuid)
     : null) || selectWelTapAdapter(adapters)
   if (adapter) {
+    adapter = await ensureAsciiTapName(adapter)
     rememberTapAdapter(adapter)
     return { ...current, adapterReady: true, tapName: adapter.name, tapNode: adapter.name }
   }
@@ -162,6 +184,7 @@ async function prepare() {
     adapter = (createdGuid ? adapters.find(({ guid }) => guid.toLowerCase() === createdGuid) : null)
       || selectWelTapAdapter(adapters)
     if (adapter) {
+      adapter = await ensureAsciiTapName(adapter)
       rememberTapAdapter(adapter)
       return { ...current, adapterReady: true, tapName: adapter.name, tapNode: adapter.name }
     }

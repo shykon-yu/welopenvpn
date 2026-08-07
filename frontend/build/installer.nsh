@@ -95,7 +95,7 @@ check_named_tap:
 
   ; Reuse an existing tap0901 driver when possible. This avoids replacing a
   ; working driver owned by another platform and prevents needless prompts.
-  nsExec::ExecToStack '"$INSTDIR\resources\openvpn\bin\tapctl.exe" create --hwid "root\tap0901" --name "WEL Virtual LAN"'
+  nsExec::ExecToStack '"$INSTDIR\resources\openvpn\bin\tapctl.exe" create --hwid "root\tap0901" --name "WEL TAP"'
   Pop $2
   Pop $3
   StrCmp $2 "0" remember_created_tap
