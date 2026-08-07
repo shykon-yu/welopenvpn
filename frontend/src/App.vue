@@ -29,6 +29,7 @@ const form = ref({ username: '', password: '' })
 const GAME_PATH_KEY = 'we8.game-path'
 const LEGACY_GAME_PATH_KEY = 'pes8.game-path'
 const FIREWALL_GAME_PATH_KEY = 'we8.firewall-game-path'
+const FIREWALL_RULE_REVISION = '2'
 const gamePath = ref(localStorage.getItem(GAME_PATH_KEY) ?? localStorage.getItem(LEGACY_GAME_PATH_KEY) ?? '')
 const totalOnline = computed(() => rooms.value.reduce((total, room) => total + room.members, 0))
 const activeRoom = computed(() => activeLease.value ? rooms.value.find(room => room.id === activeLease.value?.room_id) ?? null : null)
@@ -325,10 +326,11 @@ async function chooseGame() {
 }
 async function ensureGameFirewall(path: string) {
   if (!desktop()) return true
-  if (localStorage.getItem(FIREWALL_GAME_PATH_KEY) === path) return true
+  const firewallState = `${FIREWALL_RULE_REVISION}:${path}`
+  if (localStorage.getItem(FIREWALL_GAME_PATH_KEY) === firewallState) return true
   try {
     await desktop()!.configureGameFirewall(path)
-    localStorage.setItem(FIREWALL_GAME_PATH_KEY, path)
+    localStorage.setItem(FIREWALL_GAME_PATH_KEY, firewallState)
     notice.value = '游戏路径与联机防火墙已配置'
     return true
   } catch (error) {

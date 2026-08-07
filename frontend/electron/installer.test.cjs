@@ -6,6 +6,7 @@ const path = require('node:path')
 const installer = fs.readFileSync(path.join(__dirname, '..', 'build', 'installer.nsh'), 'utf8')
 const cleanupOpenVpnGui = fs.readFileSync(path.join(__dirname, '..', 'build', 'cleanup-openvpn-gui.ps1'), 'utf8')
 const removeWelOpenVpnMsi = fs.readFileSync(path.join(__dirname, '..', 'build', 'remove-wel-openvpn-msi.ps1'), 'utf8')
+const installMacro = installer.slice(0, installer.indexOf('!macro customUnInstall'))
 
 test('bundles the OpenVPN runtime and installs only the official Win7 TAP package', () => {
   assert.doesNotMatch(installer, /msiexec\.exe/)
@@ -39,6 +40,11 @@ test('runs installer system commands without visible console windows', () => {
   assert.doesNotMatch(installer, /ExecWait/)
   assert.match(installer, /nsExec::ExecToLog[^\n]+netsh\.exe/)
   assert.match(installer, /nsExec::ExecToLog[^\n]+powershell\.exe/)
+})
+
+test('does not delete the path-specific game broadcast rule during install', () => {
+  assert.doesNotMatch(installMacro, /firewall delete rule name="WEL WE8 Game Broadcast Outbound"/)
+  assert.match(installer.slice(installer.indexOf('!macro customUnInstall')), /firewall delete rule name="WEL WE8 Game Broadcast Outbound"/)
 })
 
 test('removes unused OpenVPN GUI shortcuts and startup entries', () => {
