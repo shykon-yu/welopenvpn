@@ -20,6 +20,14 @@ test('resets numbered WEL TAP adapters during install and uninstall', () => {
   assert.match(removeTap, /& \$TapctlPath delete \$name/)
 })
 
+test('keeps the Windows network connection name pinned to WEL TAP', () => {
+  assert.match(ensureTap, /Release-WelTapConnectionNames/)
+  assert.match(ensureTap, /Rename-NetAdapter -Name \$adapter\.Name -NewName 'WEL TAP'/)
+  assert.match(ensureTap, /Set-ItemProperty -LiteralPath \$connectionKey -Name 'Name'/)
+  assert.match(ensureTap, /\^WEL TAP\( \\d\+\)\?\$/)
+  assert.match(removeTap, /Release-WelTapConnectionNames/)
+})
+
 test('runs installer system commands without visible console windows', () => {
   assert.doesNotMatch(installer, /ExecWait/)
   assert.match(installer, /nsExec::ExecToLog[^\n]+netsh\.exe/)
