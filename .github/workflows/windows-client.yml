@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-2022
@@ -41,3 +44,33 @@ jobs:
           name: wel-windows-win7-nsis
           path: frontend/release/WEL职业联盟对战平台-*-安装包.exe
           if-no-files-found: error
+      - name: Prepare update files
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          $installer = Get-ChildItem release -Filter 'WEL职业联盟对战平台-*-安装包.exe' | Select-Object -First 1
+          if ($null -eq $installer) {
+            throw '没有找到 Windows 安装包'
+          }
+          $asciiName = "WEL-Platform-Setup-$version.exe"
+          Copy-Item $installer.FullName "release/$asciiName" -Force
+          $metadata = @{
+            version = $version
+            notes = "WEL职业联盟对战平台 v$version"
+            githubUrl = "https://github.com/${{ github.repository }}/releases/download/windows-client-latest/$asciiName"
+            serverUrl = "http://8.133.189.9/downloads/welopenvpn/$asciiName"
+          } | ConvertTo-Json
+          Set-Content -Path 'release/latest.json' -Value $metadata -Encoding utf8
+      - name: Publish latest update release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: windows-client-latest
+          name: WEL职业联盟对战平台最新版本
+          body: 自动发布的 Windows 客户端更新包
+          files: |
+            frontend/release/WEL-Platform-Setup-*.exe
+            frontend/release/latest.json
+          fail_on_unmatched_files: true
+          overwrite_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

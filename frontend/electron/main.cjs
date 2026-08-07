@@ -7,6 +7,7 @@ const { version: appVersion } = require('../package.json')
 const { configureGameFirewall } = require('./firewall.cjs')
 const { decodeProcessOutput, findNetstatLines, inspectVpnNetwork, parseTasklistPids, prioritizeVpnNetwork, runProcess } = require('./network.cjs')
 const openvpn = require('./openvpn.cjs')
+const updater = require('./updater.cjs')
 
 if (process.platform === 'win32') {
   app.commandLine.appendSwitch('no-sandbox')
@@ -74,8 +75,55 @@ function createChineseMenu() {
     { label: '文件', submenu: [{ role: 'reload', label: '重新载入' }, { type: 'separator' }, { role: 'quit', label: '退出' }] },
     { label: '编辑', submenu: [{ role: 'cut', label: '剪切' }, { role: 'copy', label: '复制' }, { role: 'paste', label: '粘贴' }, { role: 'selectAll', label: '全选' }] },
     { label: '查看', submenu: [{ role: 'resetZoom', label: '实际大小' }, { role: 'zoomIn', label: '放大' }, { role: 'zoomOut', label: '缩小' }, { type: 'separator' }, { role: 'togglefullscreen', label: '全屏' }] },
-    { label: '帮助', submenu: [{ label: '关于 WEL职业联盟对战平台', click: () => dialog.showMessageBox({ type: 'info', title: '关于', message: `WEL职业联盟对战平台 v${appVersion}` }) }] },
+    { label: '帮助', submenu: [
+      { label: '检查更新', click: () => checkForUpdates(true) },
+      { type: 'separator' },
+      { label: '关于 WEL职业联盟对战平台', click: () => dialog.showMessageBox({ type: 'info', title: '关于', message: `WEL职业联盟对战平台 v${appVersion}` }) },
+    ] },
   ]))
+}
+
+async function checkForUpdates(showNoUpdateMessage = false) {
+  try {
+    const info = await updater.fetchUpdateInfo(appVersion)
+    if (!info.available) {
+      if (showNoUpdateMessage) {
+        await dialog.showMessageBox(mainWindow, { type: 'info', title: '检查更新', message: `当前已是最新版本 v${appVersion}` })
+      }
+      return
+    }
+
+    const result = await dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: '发现新版本',
+      message: `发现新版本 v${info.version}`,
+      detail: info.notes || '是否下载并安装新版客户端？',
+      buttons: ['下载并安装', '稍后再说'],
+      defaultId: 0,
+      cancelId: 1,
+    })
+    if (result.response !== 0) return
+
+    const target = await updater.downloadInstaller(info, path.join(app.getPath('temp'), 'WELPlatformUpdates'))
+    await dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: '更新包已下载',
+      message: '即将启动安装包，平台会自动退出。',
+      detail: `下载来源：${target.url}`,
+    })
+    isQuitting = true
+    spawn(target.path, [], { detached: true, stdio: 'ignore', windowsHide: false }).unref()
+    app.quit()
+  } catch (error) {
+    if (showNoUpdateMessage) {
+      await dialog.showMessageBox(mainWindow, {
+        type: 'warning',
+        title: '检查更新失败',
+        message: '暂时无法检查或下载更新。',
+        detail: error instanceof Error ? error.message : String(error || ''),
+      })
+    }
+  }
 }
 
 function resolveGameExecutable(gamePath) {
@@ -184,6 +232,7 @@ app.whenReady()
     createChineseMenu()
     createWindow()
     writeLog('主窗口已创建')
+    setTimeout(() => { checkForUpdates(false) }, 5000)
   })
   .catch((error) => {
     showFatalError(error)
