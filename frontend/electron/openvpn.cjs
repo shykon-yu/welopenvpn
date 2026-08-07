@@ -6,7 +6,8 @@ const { prioritizeVpnNetwork, runPowerShell, waitForVpnNetwork } = require('./ne
 
 const DEFAULT_HOST = '8.133.189.9'
 const DEFAULT_PORT = 12001
-const TAP_NAME = 'WEL TAP'
+const TAP_NAME = 'WEL Virtual LAN'
+const LEGACY_TAP_NAME = /^WEL TAP(?: \d+)?$/i
 const OPENVPN_READY = /Initialization Sequence Completed/i
 const OPENVPN_PROGRESS = /(?:PUSH_REPLY|open_tun|tap-windows6 device \[.+?\] opened|Successful ARP Flush)/i
 const CONNECT_TIMEOUT_MS = 45000
@@ -63,8 +64,21 @@ function parseTapctlList(output) {
     .filter(Boolean)
 }
 
-function isNumberedWelTap(name) {
-  return /^WEL TAP \d+$/i.test(String(name || '').trim())
+function isWelTapAdapter(name) {
+  const normalized = String(name || '').trim()
+  return normalized.toLowerCase() === TAP_NAME.toLowerCase() || LEGACY_TAP_NAME.test(normalized)
+}
+
+function selectWelTapAdapter(adapters) {
+  const owned = adapters.filter(({ name }) => isWelTapAdapter(name))
+  return owned.find(({ name }) => name.toLowerCase() === TAP_NAME.toLowerCase())
+    || owned.find(({ name }) => name.toLowerCase() === 'wel tap')
+    || owned.sort((left, right) => {
+      const leftNumber = Number(left.name.match(/(\d+)$/)?.[1] || 0)
+      const rightNumber = Number(right.name.match(/(\d+)$/)?.[1] || 0)
+      return rightNumber - leftNumber
+    })[0]
+    || null
 }
 
 function runTapctl(executable, args, timeoutMs = 10000) {
@@ -94,14 +108,27 @@ async function listTapAdapters(tapctl) {
   return parseTapctlList(await runTapctl(tapctl, ['list']))
 }
 
-async function deleteNumberedWelTaps(tapctl, adapters) {
-  for (const adapter of adapters.filter(({ name }) => isNumberedWelTap(name))) {
+async function deleteOtherWelTaps(tapctl, adapters, keepGuid) {
+  for (const adapter of adapters.filter(({ guid, name }) => guid !== keepGuid && isWelTapAdapter(name))) {
     try {
       await runTapctl(tapctl, ['delete', adapter.guid])
     } catch {
       // A stale adapter can still be busy during startup. It must not prevent
       // reuse of the primary WEL TAP adapter.
     }
+  }
+}
+
+async function renameWelTap(tapctl, adapter) {
+  if (adapter.name.toLowerCase() === TAP_NAME.toLowerCase()) return adapter
+  const netsh = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'netsh.exe')
+  try {
+    await runTapctl(netsh, ['interface', 'set', 'interface', `name=${adapter.name}`, `newname=${TAP_NAME}`])
+    const adapters = await listTapAdapters(tapctl)
+    return adapters.find(({ name }) => name.toLowerCase() === TAP_NAME.toLowerCase()) || adapter
+  } catch {
+    // The connection can still be used under the Windows-assigned name.
+    return adapter
   }
 }
 
@@ -114,16 +141,23 @@ async function prepare() {
   if (!tapctl) throw new Error('未检测到 WEL 虚拟网卡管理组件，请重新安装客户端')
 
   let adapters = await listTapAdapters(tapctl)
-  await deleteNumberedWelTaps(tapctl, adapters)
-  if (adapters.some(({ name }) => name.toLowerCase() === TAP_NAME.toLowerCase())) {
-    return { ...current, adapterReady: true }
+  let adapter = selectWelTapAdapter(adapters)
+  if (adapter) {
+    adapter = await renameWelTap(tapctl, adapter)
+    adapters = await listTapAdapters(tapctl)
+    const selected = selectWelTapAdapter(adapters) || adapter
+    if (selected.name.toLowerCase() === TAP_NAME.toLowerCase()) {
+      await deleteOtherWelTaps(tapctl, adapters, selected.guid)
+    }
+    return { ...current, adapterReady: true, tapName: selected.name }
   }
 
   await runTapctl(tapctl, ['create', '--hwid', 'root\\tap0901', '--name', TAP_NAME], 20000)
   for (let attempt = 0; attempt < 20; attempt += 1) {
     adapters = await listTapAdapters(tapctl)
-    if (adapters.some(({ name }) => name.toLowerCase() === TAP_NAME.toLowerCase())) {
-      return { ...current, adapterReady: true }
+    adapter = selectWelTapAdapter(adapters)
+    if (adapter) {
+      return { ...current, adapterReady: true, tapName: adapter.name }
     }
     await wait(300)
   }
@@ -169,7 +203,7 @@ function bundledCaPath() {
   return candidates.find((candidate) => fs.existsSync(candidate)) || null
 }
 
-function buildConfig({ host, port, username, token, roomID, subnetCidr }) {
+function buildConfig({ host, port, username, token, roomID, subnetCidr, tapName = TAP_NAME }) {
   const caPath = bundledCaPath()
   if (!caPath) throw new Error('联机证书未随客户端安装，请重新安装 WEL职业联盟对战平台')
   const runtime = ensureRuntimeDirectory()
@@ -183,7 +217,7 @@ function buildConfig({ host, port, username, token, roomID, subnetCidr }) {
   const config = [
     'client',
     'dev tap',
-    `dev-node "${TAP_NAME}"`,
+    `dev-node "${tapName}"`,
     'proto udp4',
     'explicit-exit-notify 1',
     `remote ${host} ${port}`,
@@ -320,7 +354,7 @@ Get-WmiObject Win32_Process -Filter "Name = 'openvpn.exe'" |
   }
 }
 
-async function connectAttempt({ executable, host, port, roomID, username, token, subnetCidr }) {
+async function connectAttempt({ executable, host, port, roomID, username, token, subnetCidr, tapName }) {
   await stopConnection()
   const files = buildConfig({
     host: host || DEFAULT_HOST,
@@ -329,6 +363,7 @@ async function connectAttempt({ executable, host, port, roomID, username, token,
     token,
     roomID,
     subnetCidr,
+    tapName,
   })
   const child = spawn(executable, ['--config', files.configPath], { windowsHide: true })
   const output = []
@@ -379,14 +414,14 @@ async function connect({ host, port, roomID, username, token, subnetCidr }) {
   if (!executable) throw new Error('未检测到 OpenVPN 运行组件，请重新运行完整安装包')
   if (!token || !username || !roomID || !subnetCidr) throw new Error('OpenVPN 房间凭据不完整')
 
-  await prepare()
+  const prepared = await prepare()
   await stopConnection()
   await stopStaleWelOpenVpnProcesses()
 
   let lastError = null
   for (let attempt = 1; attempt <= CONNECT_MAX_ATTEMPTS; attempt += 1) {
     try {
-      return await connectAttempt({ executable, host, port, roomID, username, token, subnetCidr })
+      return await connectAttempt({ executable, host, port, roomID, username, token, subnetCidr, tapName: prepared.tapName })
     } catch (error) {
       lastError = error
       if (attempt >= CONNECT_MAX_ATTEMPTS || !isRetryableConnectError(error)) throw error
@@ -407,12 +442,13 @@ module.exports = {
   OPENVPN_REMOTE_CERT_EKU,
   TAP_NAME,
   connect,
-  isNumberedWelTap,
+  isWelTapAdapter,
   isRetryableConnectError,
   openVpnConfigPath,
   parseTapctlList,
   prepare,
   readRecentLog,
+  selectWelTapAdapter,
   status,
   stopConnection,
 }

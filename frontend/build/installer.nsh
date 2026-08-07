@@ -51,21 +51,21 @@ cleanup_gui_done:
   SetShellVarContext all
 
   DetailPrint "正在准备 WEL 虚拟网卡..."
-  nsExec::ExecToStack '"$SYSDIR\cmd.exe" /D /S /C ""$INSTDIR\resources\openvpn\bin\tapctl.exe" list | "$SYSDIR\findstr.exe" /L /E /C:"WEL TAP""'
+  nsExec::ExecToStack '"$SYSDIR\cmd.exe" /D /S /C ""$INSTDIR\resources\openvpn\bin\tapctl.exe" list | "$SYSDIR\findstr.exe" /L /C:"WEL Virtual LAN" /C:"WEL TAP""'
   Pop $2
   Pop $3
   StrCmp $2 "0" tap_ready
 
   ; Reuse an existing tap0901 driver when possible. This avoids replacing a
   ; working driver owned by another platform and prevents needless prompts.
-  nsExec::ExecToLog '"$INSTDIR\resources\openvpn\bin\tapctl.exe" create --hwid "root\tap0901" --name "WEL TAP"'
+  nsExec::ExecToLog '"$INSTDIR\resources\openvpn\bin\tapctl.exe" create --hwid "root\tap0901" --name "WEL Virtual LAN"'
   Pop $2
   StrCmp $2 "0" verify_created_tap
   Goto install_tap_driver
 
 verify_created_tap:
   Sleep 1000
-  nsExec::ExecToStack '"$SYSDIR\cmd.exe" /D /S /C ""$INSTDIR\resources\openvpn\bin\tapctl.exe" list | "$SYSDIR\findstr.exe" /L /E /C:"WEL TAP""'
+  nsExec::ExecToStack '"$SYSDIR\cmd.exe" /D /S /C ""$INSTDIR\resources\openvpn\bin\tapctl.exe" list | "$SYSDIR\findstr.exe" /L /C:"WEL Virtual LAN" /C:"WEL TAP""'
   Pop $2
   Pop $3
   StrCmp $2 "0" tap_ready
@@ -82,14 +82,14 @@ install_tap_driver:
 
 tap_driver_installed:
   Sleep 2000
-  nsExec::ExecToLog '"$INSTDIR\resources\openvpn\bin\tapctl.exe" create --hwid "root\tap0901" --name "WEL TAP"'
+  nsExec::ExecToLog '"$INSTDIR\resources\openvpn\bin\tapctl.exe" create --hwid "root\tap0901" --name "WEL Virtual LAN"'
   Pop $2
   StrCmp $2 "0" verify_driver_tap
   Goto tap_requires_reboot
 
 verify_driver_tap:
   Sleep 1000
-  nsExec::ExecToStack '"$SYSDIR\cmd.exe" /D /S /C ""$INSTDIR\resources\openvpn\bin\tapctl.exe" list | "$SYSDIR\findstr.exe" /L /E /C:"WEL TAP""'
+  nsExec::ExecToStack '"$SYSDIR\cmd.exe" /D /S /C ""$INSTDIR\resources\openvpn\bin\tapctl.exe" list | "$SYSDIR\findstr.exe" /L /C:"WEL Virtual LAN" /C:"WEL TAP""'
   Pop $2
   Pop $3
   StrCmp $2 "0" tap_ready
@@ -116,7 +116,6 @@ firewall_ready:
 !macro customUnInstall
   SetOutPath "$PLUGINSDIR"
   File /oname=cleanup-openvpn-gui.ps1 "${BUILD_RESOURCES_DIR}\cleanup-openvpn-gui.ps1"
-  File /oname=wel-tapctl.exe "${BUILD_RESOURCES_DIR}\..\resources\openvpn\bin\tapctl.exe"
   nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /F /IM openvpn-gui.exe'
   Pop $2
   IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 uninstall_cleanup_gui_system32
@@ -127,19 +126,8 @@ uninstall_cleanup_gui_system32:
   nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\cleanup-openvpn-gui.ps1"'
   Pop $3
 uninstall_cleanup_gui_done:
-  ; Delete only adapters owned by WEL. Direct tapctl calls also work on Win7
-  ; machines where PowerShell/WMI cannot enumerate network adapters reliably.
-  nsExec::ExecToLog '"$PLUGINSDIR\wel-tapctl.exe" delete "WEL TAP"'
-  Pop $1
-  StrCpy $4 2
-uninstall_wel_tap_loop:
-  IntCmp $4 100 uninstall_wel_tap_done uninstall_wel_tap_delete uninstall_wel_tap_done
-uninstall_wel_tap_delete:
-  nsExec::ExecToLog '"$PLUGINSDIR\wel-tapctl.exe" delete "WEL TAP $4"'
-  Pop $1
-  IntOp $4 $4 + 1
-  Goto uninstall_wel_tap_loop
-uninstall_wel_tap_done:
+  ; Keep the dedicated adapter across upgrades and reinstalls. Recreating a
+  ; Windows network connection makes Windows append an ever-growing suffix.
   nsExec::ExecToLog '"$SYSDIR\netsh.exe" advfirewall firewall delete rule name="WEL WE8 Virtual LAN ICMPv4"'
   Pop $0
   SetShellVarContext all

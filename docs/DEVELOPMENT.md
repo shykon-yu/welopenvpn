@@ -162,7 +162,7 @@ WE8 使用老式 DirectPlay 广播发现主机。Radmin、ZeroTier、其他 TAP/
 
 ### 5.4 TAP 网卡命名
 
-安装器会复用已有的 `WEL TAP`，清理重复的编号连接，并把新连接名固定为 `WEL TAP`。OpenVPN 运行文件由客户端直接携带，Windows 中只安装 TAP 驱动，不安装完整 OpenVPN、GUI 或 Wintun。
+安装器会复用已有的 WEL 专用 TAP 网卡，不在普通升级或卸载时反复删除重建。新连接使用 `WEL Virtual LAN`，旧版生成的 `WEL TAP` 或 `WEL TAP 18` 会在客户端启动时复用并尝试重命名。OpenVPN 运行文件由客户端直接携带，Windows 中只安装 TAP 驱动，不安装完整 OpenVPN、GUI 或 Wintun。
 
 相关脚本：
 

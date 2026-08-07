@@ -13,16 +13,14 @@ test('bundles the OpenVPN runtime and installs only the official Win7 TAP packag
   assert.match(installer, /wel-tap-win7\.exe" \/S/)
   assert.doesNotMatch(installer, /Drivers\.Wintun|OpenVPN GUI.*ADDLOCAL/)
   assert.match(installer, /resources\\openvpn\\bin\\openvpn\.exe/)
-  assert.match(installer, /File \/oname=wel-tapctl\.exe/)
-  assert.match(installer, /tapctl\.exe" create --hwid "root\\tap0901" --name "WEL TAP"/)
+  assert.match(installer, /tapctl\.exe" create --hwid "root\\tap0901" --name "WEL Virtual LAN"/)
   assert.doesNotMatch(installer, /ensure-wel-tap\.ps1|remove-wel-tap\.ps1/)
 })
 
-test('reuses WEL TAP and removes only WEL-owned adapters without PowerShell WMI', () => {
-  assert.match(installer, /tapctl\.exe" list .*findstr\.exe" \/L \/E \/C:"WEL TAP"/)
-  assert.match(installer, /wel-tapctl\.exe" delete "WEL TAP"/)
-  assert.match(installer, /wel-tapctl\.exe" delete "WEL TAP \$4"/)
-  assert.match(installer, /IntCmp \$4 100/)
+test('reuses the dedicated adapter across upgrades without recreating it', () => {
+  assert.match(installer, /tapctl\.exe" list .*findstr\.exe" \/L \/C:"WEL Virtual LAN" \/C:"WEL TAP"/)
+  assert.doesNotMatch(installer, /wel-tapctl\.exe" delete|uninstall_wel_tap_loop/)
+  assert.match(installer, /Keep the dedicated adapter across upgrades and reinstalls/)
   assert.doesNotMatch(installer, /Win32_NetworkAdapter|Get-NetAdapter/)
 })
 

@@ -3,7 +3,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const os = require('node:os')
-const { CONNECT_MAX_ATTEMPTS, CONNECT_TIMEOUT_MS, OPENVPN_DATA_CIPHERS, OPENVPN_FALLBACK_CIPHER, OPENVPN_PROGRESS, OPENVPN_REMOTE_CERT_EKU, isNumberedWelTap, isRetryableConnectError, openVpnConfigPath, parseTapctlList, readRecentLog } = require('./openvpn.cjs')
+const { CONNECT_MAX_ATTEMPTS, CONNECT_TIMEOUT_MS, OPENVPN_DATA_CIPHERS, OPENVPN_FALLBACK_CIPHER, OPENVPN_PROGRESS, OPENVPN_REMOTE_CERT_EKU, isWelTapAdapter, isRetryableConnectError, openVpnConfigPath, parseTapctlList, readRecentLog, selectWelTapAdapter } = require('./openvpn.cjs')
 
 test('uses OpenVPN-safe paths in generated config values', () => {
   assert.equal(
@@ -58,7 +58,7 @@ test('retries transient OpenVPN handshake timeouts only', () => {
   assert.equal(isRetryableConnectError(new Error('OpenVPN 进程提前退出（代码 1）')), false)
 })
 
-test('parses tapctl adapter GUIDs and WEL network connection names', () => {
+test('parses and reuses Windows-assigned WEL network connection names', () => {
   const adapters = parseTapctlList([
     '{11111111-2222-3333-4444-555555555555}\tWEL TAP',
     '{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}    "WEL TAP 17"',
@@ -68,14 +68,19 @@ test('parses tapctl adapter GUIDs and WEL network connection names', () => {
     { guid: '{11111111-2222-3333-4444-555555555555}', name: 'WEL TAP' },
     { guid: '{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}', name: 'WEL TAP 17' },
   ])
-  assert.equal(isNumberedWelTap('WEL TAP 17'), true)
-  assert.equal(isNumberedWelTap('WEL TAP'), false)
-  assert.equal(isNumberedWelTap('Other TAP 17'), false)
+  assert.equal(isWelTapAdapter('WEL TAP 17'), true)
+  assert.equal(isWelTapAdapter('WEL TAP'), true)
+  assert.equal(isWelTapAdapter('WEL Virtual LAN'), true)
+  assert.equal(isWelTapAdapter('Other TAP 17'), false)
+  assert.equal(selectWelTapAdapter(adapters).name, 'WEL TAP')
+  assert.equal(selectWelTapAdapter(adapters.slice(1)).name, 'WEL TAP 17')
 })
 
-test('prepares the adapter directly with tapctl before connecting', () => {
+test('keeps and dynamically selects the actual adapter name before connecting', () => {
   const client = fs.readFileSync(path.join(__dirname, 'openvpn.cjs'), 'utf8')
   assert.match(client, /runTapctl\(tapctl, \['create', '--hwid', 'root\\\\tap0901', '--name', TAP_NAME\]/)
   assert.match(client, /runTapctl\(tapctl, \['delete', adapter\.guid\]\)/)
+  assert.match(client, /`dev-node "\$\{tapName\}"`/)
+  assert.match(client, /newname=\$\{TAP_NAME\}/)
   assert.match(client, /await prepare\(\)/)
 })
