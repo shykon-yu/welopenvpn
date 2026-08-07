@@ -265,37 +265,6 @@ ${lowerConflictingMetrics}
 `
 }
 
-function buildDisableConflictingAdaptersScript(conflictingAdapterIndexes = [], protectedInterfaceIndex = null) {
-  const protectedIndex = Number(protectedInterfaceIndex)
-  const indexes = [...new Set(conflictingAdapterIndexes.map(Number))]
-    .filter((candidate) => Number.isInteger(candidate) && candidate > 0 && candidate !== protectedIndex)
-  if (!indexes.length) return 'exit 0'
-  const indexList = indexes.join(',')
-  return `
-$netsh = Join-Path $env:SystemRoot 'System32\\netsh.exe'
-$targets = @(${indexList})
-foreach ($target in $targets) {
-  $adapter = Get-WmiObject Win32_NetworkAdapter | Where-Object { $_.InterfaceIndex -eq $target } | Select-Object -First 1
-  if ($null -eq $adapter) { continue }
-  $name = [string]$adapter.NetConnectionID
-  $disabled = $false
-  if ([string]::IsNullOrWhiteSpace($name)) { continue }
-  & $netsh interface set interface name="$name" admin=disabled | Out-Null
-  if ($LASTEXITCODE -eq 0) { $disabled = $true }
-  if (-not $disabled) {
-    Disable-NetAdapter -Name $name -Confirm:$false -ErrorAction SilentlyContinue
-    $disabled = $?
-  }
-  if (-not $disabled) {
-    $result = $adapter.Disable()
-    $disabled = ($null -ne $result -and $result.ReturnValue -eq 0)
-  }
-  if (-not $disabled) { exit 1 }
-}
-exit 0
-`
-}
-
 async function runElevatedPowerShell(script, timeoutMs = 120000) {
   const innerCommand = Buffer.from(script, 'utf16le').toString('base64')
   const elevatedCommand = `
@@ -305,22 +274,6 @@ if ($null -eq $process) { exit 1 }
 exit $process.ExitCode
 `
   return runPowerShell(elevatedCommand, timeoutMs)
-}
-
-async function disableConflictingAdapters(cidr) {
-  const network = await inspectVpnNetwork(cidr)
-  if (!network.connected || network.conflictingAdapterIndexes.length === 0) return network
-
-  try {
-    await runElevatedPowerShell(buildDisableConflictingAdaptersScript(network.conflictingAdapterIndexes, network.interfaceIndex))
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    return inspectVpnNetwork(cidr)
-  } catch {
-    return {
-      ...network,
-      warnings: [...network.warnings, '无法一键禁用冲突网卡，请同意管理员授权，或到控制面板网络连接中手动禁用'],
-    }
-  }
 }
 
 async function prioritizeVpnNetwork(cidr) {
@@ -352,10 +305,8 @@ async function waitForVpnNetwork(cidr, timeoutMs = 30000) {
 
 module.exports = {
   analyzeNetwork,
-  buildDisableConflictingAdaptersScript,
   buildVpnPriorityScript,
   decodeProcessOutput,
-  disableConflictingAdapters,
   findNetstatLines,
   findRoomAddress,
   inspectVpnNetwork,

@@ -354,44 +354,30 @@ function vpnPriorityPrompt(status: DesktopLeaseStatus) {
   ].filter(Boolean).join('\n\n')
 }
 
-async function disableConflictingAdaptersBeforeLaunch(status: DesktopLeaseStatus, lease: Lease) {
+function shouldLaunchWithConflictingAdapters(status: DesktopLeaseStatus) {
   if (!status.conflictingAdapters.length) return status
-  const shouldDisable = window.confirm([
+  const shouldContinue = window.confirm([
     '检测到可能影响 WE8 搜房间的冲突虚拟网卡：',
     status.conflictingAdapters.join('、'),
     '',
     '这些网卡可能导致双方能 Ping 通，但游戏互相搜不到、同意后连不上。',
-    '建议一键禁用这些控制面板网络连接里的冲突网卡，再启动 WE8。',
+    '请手动进入：控制面板 -> 网络和共享中心 -> 更改适配器设置，禁用这些冲突网卡后再启动 WE8。',
     '',
-    '点“确定”一键禁用冲突网卡。',
-    '点“取消”暂不启动，稍后可手动到控制面板网络连接中禁用。',
+    '点“确定”暂不启动，手动禁用后再点启动。',
+    '点“取消”仍然继续启动 WE8。',
   ].join('\n'))
-  if (!shouldDisable) {
-    notice.value = '已取消启动；请禁用冲突虚拟网卡后再试'
+  if (shouldContinue) {
+    notice.value = '已取消启动；请到控制面板网络连接中禁用冲突网卡后再试'
     return null
   }
-
-  const updated = await desktop()!.disableConflictingAdapters({ username: lease.username, subnetCidr: lease.subnet_cidr })
-  if (updated.conflictingAdapters.length) {
-    window.alert([
-      '一键禁用冲突网卡没有成功。',
-      '',
-      `仍检测到：${updated.conflictingAdapters.join('、')}`,
-      '',
-      '请以管理员身份运行平台，或手动进入：控制面板 -> 网络和共享中心 -> 更改适配器设置，禁用这些冲突网卡后再启动 WE8。',
-    ].join('\n'))
-    notice.value = '请手动禁用冲突虚拟网卡后再启动游戏'
-    return null
-  }
-
-  notice.value = '已禁用冲突虚拟网卡，可以启动 WE8'
-  return updated
+  notice.value = '已继续启动；如搜不到主机，请手动禁用冲突网卡后重试'
+  return status
 }
 
 async function inspectAndMaybePrioritizeVpn(lease: Lease) {
   let inspected: DesktopLeaseStatus | null = await desktop()!.inspectVpn({ username: lease.username, subnetCidr: lease.subnet_cidr })
   if (!inspected.connected) throw new Error('尚未获取房间虚拟 IP，请退出房间后重新进入')
-  inspected = await disableConflictingAdaptersBeforeLaunch(inspected, lease)
+  inspected = shouldLaunchWithConflictingAdapters(inspected)
   if (!inspected) return null
   if (!needsVpnPriorityAdjustment(inspected)) return inspected
   if (!window.confirm(vpnPriorityPrompt(inspected))) {
