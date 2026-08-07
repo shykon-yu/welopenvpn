@@ -9,6 +9,8 @@ client line for the platform.
 - `deploy/openvpn/`: six-room Ubuntu OpenVPN TAP server template and JWT lease
   verifier.
 - `.github/workflows/`: frontend checks and conditional Windows packaging.
+- `docs/DEVELOPMENT.md`: development, testing, packaging and update workflow.
+- `docs/OPERATIONS.md`: Docker, OpenVPN, firewall, log and recovery commands.
 
 The client uses the production Laravel/Go login, room, membership and heartbeat
 APIs. OpenVPN authentication sends the current platform JWT to the room
