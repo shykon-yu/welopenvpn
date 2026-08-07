@@ -34,6 +34,102 @@ function locateOpenVpn() {
   return runtimeCandidates().find((candidate) => fs.existsSync(candidate)) || null
 }
 
+function tapctlCandidates() {
+  const openvpn = locateOpenVpn()
+  return [
+    openvpn ? path.join(path.dirname(openvpn), 'tapctl.exe') : '',
+    path.join(process.resourcesPath || '', 'openvpn', 'bin', 'tapctl.exe'),
+    path.join(__dirname, '..', 'resources', 'openvpn', 'bin', 'tapctl.exe'),
+  ].filter(Boolean)
+}
+
+function locateTapctl() {
+  return tapctlCandidates().find((candidate) => fs.existsSync(candidate)) || null
+}
+
+function parseTapctlList(output) {
+  return String(output || '')
+    .replace(/\r/g, '')
+    .split('\n')
+    .map((line) => {
+      const match = line.match(/\{([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})\}/i)
+      if (!match) return null
+      const name = line
+        .slice((match.index || 0) + match[0].length)
+        .trim()
+        .replace(/^['"]|['"]$/g, '')
+      return name ? { guid: `{${match[1]}}`, name } : null
+    })
+    .filter(Boolean)
+}
+
+function isNumberedWelTap(name) {
+  return /^WEL TAP \d+$/i.test(String(name || '').trim())
+}
+
+function runTapctl(executable, args, timeoutMs = 10000) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(executable, args, { windowsHide: true })
+    const output = []
+    const timer = setTimeout(() => {
+      try { child.kill() } catch {}
+      reject(new Error(`tapctl ${args[0]} 执行超时`))
+    }, timeoutMs)
+    child.stdout.on('data', (chunk) => output.push(chunk))
+    child.stderr.on('data', (chunk) => output.push(chunk))
+    child.once('error', (error) => {
+      clearTimeout(timer)
+      reject(error)
+    })
+    child.once('close', (code) => {
+      clearTimeout(timer)
+      const detail = Buffer.concat(output).toString('utf8').trim()
+      if (code === 0) resolve(detail)
+      else reject(new Error(`tapctl ${args[0]} 失败（代码 ${code ?? '未知'}）${detail ? `：${detail}` : ''}`))
+    })
+  })
+}
+
+async function listTapAdapters(tapctl) {
+  return parseTapctlList(await runTapctl(tapctl, ['list']))
+}
+
+async function deleteNumberedWelTaps(tapctl, adapters) {
+  for (const adapter of adapters.filter(({ name }) => isNumberedWelTap(name))) {
+    try {
+      await runTapctl(tapctl, ['delete', adapter.guid])
+    } catch {
+      // A stale adapter can still be busy during startup. It must not prevent
+      // reuse of the primary WEL TAP adapter.
+    }
+  }
+}
+
+async function prepare() {
+  const current = status()
+  if (!current.ready) throw new Error(current.message)
+  if (process.platform !== 'win32') return current
+
+  const tapctl = locateTapctl()
+  if (!tapctl) throw new Error('未检测到 WEL 虚拟网卡管理组件，请重新安装客户端')
+
+  let adapters = await listTapAdapters(tapctl)
+  await deleteNumberedWelTaps(tapctl, adapters)
+  if (adapters.some(({ name }) => name.toLowerCase() === TAP_NAME.toLowerCase())) {
+    return { ...current, adapterReady: true }
+  }
+
+  await runTapctl(tapctl, ['create', '--hwid', 'root\\tap0901', '--name', TAP_NAME], 20000)
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    adapters = await listTapAdapters(tapctl)
+    if (adapters.some(({ name }) => name.toLowerCase() === TAP_NAME.toLowerCase())) {
+      return { ...current, adapterReady: true }
+    }
+    await wait(300)
+  }
+  throw new Error('WEL 虚拟网卡创建后未被 Windows 识别，请重启电脑后重试')
+}
+
 function safeFilePart(value) {
   return String(value || '').replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 96)
 }
@@ -283,6 +379,7 @@ async function connect({ host, port, roomID, username, token, subnetCidr }) {
   if (!executable) throw new Error('未检测到 OpenVPN 运行组件，请重新运行完整安装包')
   if (!token || !username || !roomID || !subnetCidr) throw new Error('OpenVPN 房间凭据不完整')
 
+  await prepare()
   await stopConnection()
   await stopStaleWelOpenVpnProcesses()
 
@@ -310,8 +407,11 @@ module.exports = {
   OPENVPN_REMOTE_CERT_EKU,
   TAP_NAME,
   connect,
+  isNumberedWelTap,
   isRetryableConnectError,
   openVpnConfigPath,
+  parseTapctlList,
+  prepare,
   readRecentLog,
   status,
   stopConnection,

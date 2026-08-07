@@ -3,7 +3,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const os = require('node:os')
-const { CONNECT_MAX_ATTEMPTS, CONNECT_TIMEOUT_MS, OPENVPN_DATA_CIPHERS, OPENVPN_FALLBACK_CIPHER, OPENVPN_PROGRESS, OPENVPN_REMOTE_CERT_EKU, isRetryableConnectError, openVpnConfigPath, readRecentLog } = require('./openvpn.cjs')
+const { CONNECT_MAX_ATTEMPTS, CONNECT_TIMEOUT_MS, OPENVPN_DATA_CIPHERS, OPENVPN_FALLBACK_CIPHER, OPENVPN_PROGRESS, OPENVPN_REMOTE_CERT_EKU, isNumberedWelTap, isRetryableConnectError, openVpnConfigPath, parseTapctlList, readRecentLog } = require('./openvpn.cjs')
 
 test('uses OpenVPN-safe paths in generated config values', () => {
   assert.equal(
@@ -56,4 +56,26 @@ test('retries transient OpenVPN handshake timeouts only', () => {
   assert.equal(CONNECT_MAX_ATTEMPTS, 4)
   assert.equal(isRetryableConnectError(new Error('OpenVPN 连接失败：连接超时：未收到 OpenVPN 初始化完成信号')), true)
   assert.equal(isRetryableConnectError(new Error('OpenVPN 进程提前退出（代码 1）')), false)
+})
+
+test('parses tapctl adapter GUIDs and WEL network connection names', () => {
+  const adapters = parseTapctlList([
+    '{11111111-2222-3333-4444-555555555555}\tWEL TAP',
+    '{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}    "WEL TAP 17"',
+    'No adapters found.',
+  ].join('\r\n'))
+  assert.deepEqual(adapters, [
+    { guid: '{11111111-2222-3333-4444-555555555555}', name: 'WEL TAP' },
+    { guid: '{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}', name: 'WEL TAP 17' },
+  ])
+  assert.equal(isNumberedWelTap('WEL TAP 17'), true)
+  assert.equal(isNumberedWelTap('WEL TAP'), false)
+  assert.equal(isNumberedWelTap('Other TAP 17'), false)
+})
+
+test('prepares the adapter directly with tapctl before connecting', () => {
+  const client = fs.readFileSync(path.join(__dirname, 'openvpn.cjs'), 'utf8')
+  assert.match(client, /runTapctl\(tapctl, \['create', '--hwid', 'root\\\\tap0901', '--name', TAP_NAME\]/)
+  assert.match(client, /runTapctl\(tapctl, \['delete', adapter\.guid\]\)/)
+  assert.match(client, /await prepare\(\)/)
 })

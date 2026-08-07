@@ -137,11 +137,7 @@ function pingHost(host) {
 }
 
 ipcMain.handle('openvpn-status', () => openvpn.status())
-ipcMain.handle('prepare-openvpn', () => {
-  const current = openvpn.status()
-  if (!current.ready) throw new Error(current.message)
-  return current
-})
+ipcMain.handle('prepare-openvpn', () => openvpn.prepare())
 ipcMain.handle('connect-openvpn', async (_event, credentials) => openvpn.connect(credentials))
 ipcMain.handle('disconnect-openvpn', () => openvpn.stopConnection())
 ipcMain.handle('inspect-openvpn', (_event, { subnetCidr }) => inspectVpnNetwork(subnetCidr))

@@ -1,7 +1,5 @@
 !macro customInstall
   SetOutPath "$PLUGINSDIR"
-  File /oname=ensure-wel-tap.ps1 "${BUILD_RESOURCES_DIR}\ensure-wel-tap.ps1"
-  File /oname=remove-wel-tap.ps1 "${BUILD_RESOURCES_DIR}\remove-wel-tap.ps1"
   File /oname=cleanup-openvpn-gui.ps1 "${BUILD_RESOURCES_DIR}\cleanup-openvpn-gui.ps1"
   File /oname=wel-tap-win7.exe "${BUILD_RESOURCES_DIR}\tap-windows-9.24.7-I601-Win7.exe"
 
@@ -53,10 +51,26 @@ cleanup_gui_done:
   SetShellVarContext all
 
   DetailPrint "正在准备 WEL 虚拟网卡..."
-  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\ensure-wel-tap.ps1" -TapctlPath "$INSTDIR\resources\openvpn\bin\tapctl.exe"'
+  nsExec::ExecToStack '"$SYSDIR\cmd.exe" /D /S /C ""$INSTDIR\resources\openvpn\bin\tapctl.exe" list | "$SYSDIR\findstr.exe" /L /E /C:"WEL TAP""'
   Pop $2
+  Pop $3
   StrCmp $2 "0" tap_ready
 
+  ; Reuse an existing tap0901 driver when possible. This avoids replacing a
+  ; working driver owned by another platform and prevents needless prompts.
+  nsExec::ExecToLog '"$INSTDIR\resources\openvpn\bin\tapctl.exe" create --hwid "root\tap0901" --name "WEL TAP"'
+  Pop $2
+  StrCmp $2 "0" verify_created_tap
+  Goto install_tap_driver
+
+verify_created_tap:
+  Sleep 1000
+  nsExec::ExecToStack '"$SYSDIR\cmd.exe" /D /S /C ""$INSTDIR\resources\openvpn\bin\tapctl.exe" list | "$SYSDIR\findstr.exe" /L /E /C:"WEL TAP""'
+  Pop $2
+  Pop $3
+  StrCmp $2 "0" tap_ready
+
+install_tap_driver:
   DetailPrint "正在安装官方 Win7 TAP-Windows 驱动..."
   nsExec::ExecToLog '"$PLUGINSDIR\wel-tap-win7.exe" /S'
   Pop $2
@@ -67,11 +81,24 @@ cleanup_gui_done:
   Abort
 
 tap_driver_installed:
-  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\ensure-wel-tap.ps1" -TapctlPath "$INSTDIR\resources\openvpn\bin\tapctl.exe"'
+  Sleep 2000
+  nsExec::ExecToLog '"$INSTDIR\resources\openvpn\bin\tapctl.exe" create --hwid "root\tap0901" --name "WEL TAP"'
   Pop $2
+  StrCmp $2 "0" verify_driver_tap
+  Goto tap_requires_reboot
+
+verify_driver_tap:
+  Sleep 1000
+  nsExec::ExecToStack '"$SYSDIR\cmd.exe" /D /S /C ""$INSTDIR\resources\openvpn\bin\tapctl.exe" list | "$SYSDIR\findstr.exe" /L /E /C:"WEL TAP""'
+  Pop $2
+  Pop $3
   StrCmp $2 "0" tap_ready
-  MessageBox MB_ICONSTOP|MB_OK "TAP-Windows 驱动已安装，但 WEL 虚拟网卡创建失败（错误代码：$2）。请重启电脑后重新运行安装包。"
-  Abort
+
+tap_requires_reboot:
+  ; Win7 can delay publishing a newly installed network driver until reboot.
+  ; Finish installation and let the elevated app retry tapctl on first launch.
+  SetRebootFlag true
+  MessageBox MB_ICONEXCLAMATION|MB_OK "TAP-Windows 驱动已安装。Windows 尚未完成虚拟网卡初始化，请安装完成后重启电脑，再启动平台。"
 
 tap_ready:
   DetailPrint "正在配置 WEL 联机防火墙规则..."
@@ -88,7 +115,6 @@ firewall_ready:
 
 !macro customUnInstall
   SetOutPath "$PLUGINSDIR"
-  File /oname=remove-wel-tap.ps1 "${BUILD_RESOURCES_DIR}\remove-wel-tap.ps1"
   File /oname=cleanup-openvpn-gui.ps1 "${BUILD_RESOURCES_DIR}\cleanup-openvpn-gui.ps1"
   File /oname=wel-tapctl.exe "${BUILD_RESOURCES_DIR}\..\resources\openvpn\bin\tapctl.exe"
   nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /F /IM openvpn-gui.exe'
@@ -101,8 +127,19 @@ uninstall_cleanup_gui_system32:
   nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\cleanup-openvpn-gui.ps1"'
   Pop $3
 uninstall_cleanup_gui_done:
-  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\remove-wel-tap.ps1" -TapctlPath "$PLUGINSDIR\wel-tapctl.exe"'
+  ; Delete only adapters owned by WEL. Direct tapctl calls also work on Win7
+  ; machines where PowerShell/WMI cannot enumerate network adapters reliably.
+  nsExec::ExecToLog '"$PLUGINSDIR\wel-tapctl.exe" delete "WEL TAP"'
   Pop $1
+  StrCpy $4 2
+uninstall_wel_tap_loop:
+  IntCmp $4 100 uninstall_wel_tap_done uninstall_wel_tap_delete uninstall_wel_tap_done
+uninstall_wel_tap_delete:
+  nsExec::ExecToLog '"$PLUGINSDIR\wel-tapctl.exe" delete "WEL TAP $4"'
+  Pop $1
+  IntOp $4 $4 + 1
+  Goto uninstall_wel_tap_loop
+uninstall_wel_tap_done:
   nsExec::ExecToLog '"$SYSDIR\netsh.exe" advfirewall firewall delete rule name="WEL WE8 Virtual LAN ICMPv4"'
   Pop $0
   SetShellVarContext all

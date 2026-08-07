@@ -4,8 +4,6 @@ const fs = require('node:fs')
 const path = require('node:path')
 
 const installer = fs.readFileSync(path.join(__dirname, '..', 'build', 'installer.nsh'), 'utf8')
-const ensureTap = fs.readFileSync(path.join(__dirname, '..', 'build', 'ensure-wel-tap.ps1'), 'utf8')
-const removeTap = fs.readFileSync(path.join(__dirname, '..', 'build', 'remove-wel-tap.ps1'), 'utf8')
 const cleanupOpenVpnGui = fs.readFileSync(path.join(__dirname, '..', 'build', 'cleanup-openvpn-gui.ps1'), 'utf8')
 
 test('bundles the OpenVPN runtime and installs only the official Win7 TAP package', () => {
@@ -16,25 +14,22 @@ test('bundles the OpenVPN runtime and installs only the official Win7 TAP packag
   assert.doesNotMatch(installer, /Drivers\.Wintun|OpenVPN GUI.*ADDLOCAL/)
   assert.match(installer, /resources\\openvpn\\bin\\openvpn\.exe/)
   assert.match(installer, /File \/oname=wel-tapctl\.exe/)
-  assert.match(installer, /ensure-wel-tap\.ps1/)
-  assert.match(ensureTap, /create --hwid 'root\\tap0901' --name 'WEL TAP'/)
-  assert.doesNotMatch(ensureTap, /TapInstallPath|DriverInfPath/)
+  assert.match(installer, /tapctl\.exe" create --hwid "root\\tap0901" --name "WEL TAP"/)
+  assert.doesNotMatch(installer, /ensure-wel-tap\.ps1|remove-wel-tap\.ps1/)
 })
 
-test('reuses WEL TAP across upgrades and removes numbered duplicates', () => {
-  assert.match(ensureTap, /NetConnectionID -eq 'WEL TAP'/)
-  assert.match(ensureTap, /Remove-NumberedWelTapAdapters/)
-  assert.match(ensureTap, /NetConnectionID -match '\^WEL TAP \\d\+\$'/)
-  assert.match(ensureTap, /Get-WmiObject -Class Win32_NetworkAdapter/)
-  assert.doesNotMatch(ensureTap, /Get-NetAdapter/)
-  assert.match(removeTap, /for \(\$i = 2; \$i -le 50; \$i\+\+\)/)
-  assert.match(removeTap, /& \$TapctlPath delete \$name/)
+test('reuses WEL TAP and removes only WEL-owned adapters without PowerShell WMI', () => {
+  assert.match(installer, /tapctl\.exe" list .*findstr\.exe" \/L \/E \/C:"WEL TAP"/)
+  assert.match(installer, /wel-tapctl\.exe" delete "WEL TAP"/)
+  assert.match(installer, /wel-tapctl\.exe" delete "WEL TAP \$4"/)
+  assert.match(installer, /IntCmp \$4 100/)
+  assert.doesNotMatch(installer, /Win32_NetworkAdapter|Get-NetAdapter/)
 })
 
-test('keeps the Windows network connection name pinned to WEL TAP on Windows 7', () => {
-  assert.match(ensureTap, /Set-TapConnectionName/)
-  assert.match(ensureTap, /Set-ItemProperty -LiteralPath \$connectionKey -Name 'Name'/)
-  assert.match(removeTap, /Release-WelTapConnectionNames/)
+test('lets Win7 finish installation when a newly installed driver needs reboot', () => {
+  assert.match(installer, /SetRebootFlag true/)
+  assert.match(installer, /Windows 尚未完成虚拟网卡初始化/)
+  assert.doesNotMatch(installer, /WEL 虚拟网卡创建失败.*Abort/s)
 })
 
 test('runs installer system commands without visible console windows', () => {
