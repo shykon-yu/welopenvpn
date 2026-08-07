@@ -4,7 +4,7 @@ const https = require('node:https')
 const path = require('node:path')
 
 const GITHUB_UPDATE_URL = 'https://github.com/shykon-yu/welopenvpn/releases/download/windows-client-latest/latest.json'
-const SERVER_UPDATE_URL = 'http://8.133.189.9/downloads/welopenvpn/latest.json'
+const SERVER_UPDATE_URL = 'http://8.133.189.9:1421/downloads/welopenvpn/latest.json'
 
 function compareVersions(left, right) {
   const leftParts = String(left || '').replace(/^v/i, '').split('.').map((part) => Number.parseInt(part, 10) || 0)

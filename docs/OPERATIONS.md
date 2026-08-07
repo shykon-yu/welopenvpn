@@ -294,39 +294,38 @@ sudo ss -lntup
 客户端备用地址约定为：
 
 ```text
-http://8.133.189.9/downloads/welopenvpn/latest.json
-http://8.133.189.9/downloads/welopenvpn/WEL-Platform-Setup-<version>.exe
+http://8.133.189.9:1421/downloads/welopenvpn/latest.json
+http://8.133.189.9:1421/downloads/welopenvpn/WEL-Platform-Setup-<version>.exe
 ```
 
-如果服务器使用 Nginx，静态目录示例：
+`platform-web` 容器把宿主机目录挂载到 Nginx 静态目录：
 
 ```bash
-sudo mkdir -p /var/www/downloads/welopenvpn
-sudo chown -R www-data:www-data /var/www/downloads/welopenvpn
+sudo mkdir -p /srv/we8-project/downloads/welopenvpn
 ```
 
 上传文件示例：
 
 ```bash
-scp latest.json root@8.133.189.9:/var/www/downloads/welopenvpn/
-scp WEL-Platform-Setup-0.1.26.exe root@8.133.189.9:/var/www/downloads/welopenvpn/
+scp latest.json root@8.133.189.9:/srv/we8-project/downloads/welopenvpn/
+scp WEL-Platform-Setup-0.1.30.exe root@8.133.189.9:/srv/we8-project/downloads/welopenvpn/
 ```
 
 检查 HTTP 是否可读：
 
 ```bash
-curl -I http://8.133.189.9/downloads/welopenvpn/latest.json
-curl -sS http://8.133.189.9/downloads/welopenvpn/latest.json
+curl -I http://8.133.189.9:1421/downloads/welopenvpn/latest.json
+curl -sS http://8.133.189.9:1421/downloads/welopenvpn/latest.json
 ```
 
 服务器 `latest.json` 至少包含：
 
 ```json
 {
-  "version": "0.1.26",
-  "notes": "WEL职业联盟对战平台 v0.1.26",
-  "githubUrl": "https://github.com/shykon-yu/welopenvpn/releases/download/windows-client-latest/WEL-Platform-Setup-0.1.26.exe",
-  "serverUrl": "http://8.133.189.9/downloads/welopenvpn/WEL-Platform-Setup-0.1.26.exe"
+  "version": "0.1.30",
+  "notes": "WEL职业联盟对战平台 v0.1.30",
+  "githubUrl": "https://github.com/shykon-yu/welopenvpn/releases/download/windows-client-latest/WEL-Platform-Setup-0.1.30.exe",
+  "serverUrl": "http://8.133.189.9:1421/downloads/welopenvpn/WEL-Platform-Setup-0.1.30.exe"
 }
 ```
 

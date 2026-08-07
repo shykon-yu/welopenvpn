@@ -12,7 +12,7 @@ test('compares semantic client versions', () => {
 
 test('uses github as the primary update source and server as fallback', () => {
   assert.match(GITHUB_UPDATE_URL, /github\.com\/shykon-yu\/welopenvpn\/releases\/download\/windows-client-latest\/latest\.json/)
-  assert.match(SERVER_UPDATE_URL, /8\.133\.189\.9\/downloads\/welopenvpn\/latest\.json/)
+  assert.match(SERVER_UPDATE_URL, /8\.133\.189\.9:1421\/downloads\/welopenvpn\/latest\.json/)
 })
 
 test('wires update checks into the app menu and startup', () => {

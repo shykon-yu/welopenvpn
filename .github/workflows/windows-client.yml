@@ -83,7 +83,7 @@ jobs:
             version = $version
             notes = "WEL职业联盟对战平台 v$version"
             githubUrl = "https://github.com/${{ github.repository }}/releases/download/windows-client-latest/$asciiName"
-            serverUrl = "http://8.133.189.9/downloads/welopenvpn/$asciiName"
+            serverUrl = "http://8.133.189.9:1421/downloads/welopenvpn/$asciiName"
           } | ConvertTo-Json
           Set-Content -Path 'release/latest.json' -Value $metadata -Encoding utf8
       - name: Publish latest update release

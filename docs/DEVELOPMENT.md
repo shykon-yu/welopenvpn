@@ -221,7 +221,7 @@ GitHub:
 https://github.com/shykon-yu/welopenvpn/releases/download/windows-client-latest/latest.json
 
 服务器备用:
-http://8.133.189.9/downloads/welopenvpn/latest.json
+http://8.133.189.9:1421/downloads/welopenvpn/latest.json
 ```
 
 下载顺序：
