@@ -60,15 +60,8 @@ cleanup_gui_done:
   ; working driver owned by another platform and prevents needless prompts.
   nsExec::ExecToLog '"$INSTDIR\resources\openvpn\bin\tapctl.exe" create --hwid "root\tap0901" --name "WEL Virtual LAN"'
   Pop $2
-  StrCmp $2 "0" verify_created_tap
-  Goto install_tap_driver
-
-verify_created_tap:
-  Sleep 1000
-  nsExec::ExecToStack '"$SYSDIR\cmd.exe" /D /S /C ""$INSTDIR\resources\openvpn\bin\tapctl.exe" list | "$SYSDIR\findstr.exe" /L /C:"WEL Virtual LAN" /C:"WEL TAP""'
-  Pop $2
-  Pop $3
   StrCmp $2 "0" tap_ready
+  Goto install_tap_driver
 
 install_tap_driver:
   DetailPrint "正在安装官方 Win7 TAP-Windows 驱动..."
@@ -81,18 +74,17 @@ install_tap_driver:
   Abort
 
 tap_driver_installed:
-  Sleep 2000
+  ; The TAP-only Win7 package can return before Plug and Play has published
+  ; the driver. Retry device creation instead of immediately requiring reboot.
+  StrCpy $4 0
+
+create_driver_tap:
+  Sleep 1000
   nsExec::ExecToLog '"$INSTDIR\resources\openvpn\bin\tapctl.exe" create --hwid "root\tap0901" --name "WEL Virtual LAN"'
   Pop $2
-  StrCmp $2 "0" verify_driver_tap
-  Goto tap_requires_reboot
-
-verify_driver_tap:
-  Sleep 1000
-  nsExec::ExecToStack '"$SYSDIR\cmd.exe" /D /S /C ""$INSTDIR\resources\openvpn\bin\tapctl.exe" list | "$SYSDIR\findstr.exe" /L /C:"WEL Virtual LAN" /C:"WEL TAP""'
-  Pop $2
-  Pop $3
   StrCmp $2 "0" tap_ready
+  IntOp $4 $4 + 1
+  IntCmp $4 20 tap_requires_reboot create_driver_tap tap_requires_reboot
 
 tap_requires_reboot:
   ; Win7 can delay publishing a newly installed network driver until reboot.

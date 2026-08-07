@@ -27,6 +27,7 @@ test('reuses the dedicated adapter across upgrades without recreating it', () =>
 test('lets Win7 finish installation when a newly installed driver needs reboot', () => {
   assert.match(installer, /SetRebootFlag true/)
   assert.match(installer, /Windows 尚未完成虚拟网卡初始化/)
+  assert.match(installer, /IntCmp \$4 20 tap_requires_reboot create_driver_tap tap_requires_reboot/)
   assert.doesNotMatch(installer, /WEL 虚拟网卡创建失败.*Abort/s)
 })
 
