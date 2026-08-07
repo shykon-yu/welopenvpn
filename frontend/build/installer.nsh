@@ -1,6 +1,8 @@
 !macro customInstall
   SetOutPath "$PLUGINSDIR"
   File /oname=wel-openvpn.msi "${BUILD_RESOURCES_DIR}\OpenVPN-2.5.10-I601-amd64.msi"
+  File /oname=ensure-wel-tap.ps1 "${BUILD_RESOURCES_DIR}\ensure-wel-tap.ps1"
+  File /oname=remove-wel-tap.ps1 "${BUILD_RESOURCES_DIR}\remove-wel-tap.ps1"
 
   IfFileExists "$PROGRAMFILES64\OpenVPN\bin\openvpn.exe" 0 install_openvpn
   IfFileExists "$PROGRAMFILES64\OpenVPN\bin\tapctl.exe" openvpn_ready
@@ -26,13 +28,11 @@ openvpn_ready:
   SetShellVarContext all
 
   IfFileExists "$PROGRAMFILES64\OpenVPN\bin\tapctl.exe" 0 tapctl_missing
-  DetailPrint "正在创建 WEL 虚拟网卡..."
-  nsExec::ExecToLog '"$PROGRAMFILES64\OpenVPN\bin\tapctl.exe" delete "WEL TAP"'
-  Pop $1
-  nsExec::ExecToLog '"$PROGRAMFILES64\OpenVPN\bin\tapctl.exe" create --hwid root\tap0901 --name "WEL TAP"'
+  DetailPrint "正在重置 WEL 虚拟网卡..."
+  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\ensure-wel-tap.ps1" -TapctlPath "$PROGRAMFILES64\OpenVPN\bin\tapctl.exe"'
   Pop $2
   StrCmp $2 "0" tap_ready
-  MessageBox MB_ICONSTOP|MB_OK "WEL 虚拟网卡创建失败（错误代码：$2）。如果电脑装过其他联机平台，请保留其网卡并重新运行本安装包。"
+  MessageBox MB_ICONSTOP|MB_OK "WEL 虚拟网卡重置失败（错误代码：$2）。如果电脑装过其他联机平台，请保留其网卡并重新运行本安装包。"
   Abort
 
 tapctl_missing:
@@ -53,7 +53,9 @@ firewall_ready:
 !macroend
 
 !macro customUnInstall
-  nsExec::ExecToLog '"$PROGRAMFILES64\OpenVPN\bin\tapctl.exe" delete "WEL TAP"'
+  SetOutPath "$PLUGINSDIR"
+  File /oname=remove-wel-tap.ps1 "${BUILD_RESOURCES_DIR}\remove-wel-tap.ps1"
+  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\remove-wel-tap.ps1" -TapctlPath "$PROGRAMFILES64\OpenVPN\bin\tapctl.exe"'
   Pop $1
   nsExec::ExecToLog '"$SYSDIR\netsh.exe" advfirewall firewall delete rule name="WEL WE8 Virtual LAN ICMPv4"'
   Pop $0
