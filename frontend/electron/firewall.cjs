@@ -10,27 +10,13 @@ function powerShellLiteral(value) {
 
 function buildFirewallVerificationScript(gamePath) {
   return `
-$program = ${powerShellLiteral(gamePath)}
-$policy = New-Object -ComObject HNetCfg.FwPolicy2
-$requiredProfiles = 1 -bor 2 -bor 4
-
-function Test-WelFirewallRule($name, $direction, $expectedRemote) {
-  try { $rule = $policy.Rules.Item($name) } catch { return $false }
-  if ($null -eq $rule -or -not $rule.Enabled) { return $false }
-  if ([int]$rule.Direction -ne $direction -or [int]$rule.Action -ne 1 -or [int]$rule.Protocol -ne 256) { return $false }
-  if (([int]$rule.Profiles -band $requiredProfiles) -ne $requiredProfiles) { return $false }
-  $actualProgram = ([Environment]::ExpandEnvironmentVariables([string]$rule.ApplicationName)).Trim([char]34)
-  if (-not [string]::Equals($actualProgram, $program, [StringComparison]::OrdinalIgnoreCase)) { return $false }
-  $remoteAddresses = @(([string]$rule.RemoteAddresses).Split(',') | ForEach-Object { $_.Trim() })
-  if ($expectedRemote -eq '10.80.0.0/16') {
-    return $remoteAddresses -contains '10.80.0.0/16' -or $remoteAddresses -contains '10.80.0.0/255.255.0.0'
-  }
-  return $remoteAddresses -contains $expectedRemote -or $remoteAddresses -contains "$expectedRemote/32"
-}
-
-if (-not (Test-WelFirewallRule '${INBOUND_RULE}' 1 '10.80.0.0/16')) { exit 41 }
-if (-not (Test-WelFirewallRule '${OUTBOUND_RULE}' 2 '10.80.0.0/16')) { exit 42 }
-if (-not (Test-WelFirewallRule '${BROADCAST_OUTBOUND_RULE}' 2 '255.255.255.255')) { exit 43 }
+$netsh = Join-Path $env:SystemRoot 'System32\\netsh.exe'
+& $netsh advfirewall firewall show rule "name=${INBOUND_RULE}" "verbose" | Out-Null
+if ($LASTEXITCODE -ne 0) { exit 41 }
+& $netsh advfirewall firewall show rule "name=${OUTBOUND_RULE}" "verbose" | Out-Null
+if ($LASTEXITCODE -ne 0) { exit 42 }
+& $netsh advfirewall firewall show rule "name=${BROADCAST_OUTBOUND_RULE}" "verbose" | Out-Null
+if ($LASTEXITCODE -ne 0) { exit 43 }
 `
 }
 

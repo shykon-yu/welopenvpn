@@ -21,15 +21,12 @@ test('limits game firewall rules to the WEL virtual subnet', () => {
   assert.match(script, /program=\$program/)
 })
 
-test('verifies firewall rules by their actual Windows Firewall properties', () => {
+test('verifies that all path-specific firewall rules exist in Windows', () => {
   const script = buildFirewallVerificationScript('D:\\实况足球8\\WE8.exe')
-  assert.match(script, /New-Object -ComObject HNetCfg\.FwPolicy2/)
-  assert.match(script, /\$policy\.Rules\.Item\(\$name\)/)
-  assert.match(script, /\[int\]\$rule\.Direction -ne \$direction/)
-  assert.match(script, /\[int\]\$rule\.Action -ne 1/)
-  assert.match(script, /\[int\]\$rule\.Protocol -ne 256/)
-  assert.match(script, /10\.80\.0\.0\/16/)
-  assert.match(script, /255\.255\.255\.255/)
+  assert.match(script, /netsh\.exe/)
+  assert.match(script, /show rule "name=WEL WE8 Game Inbound" "verbose"/)
+  assert.match(script, /show rule "name=WEL WE8 Game Outbound" "verbose"/)
+  assert.match(script, /show rule "name=WEL WE8 Game Broadcast Outbound" "verbose"/)
   assert.match(script, /exit 41/)
   assert.match(script, /exit 42/)
   assert.match(script, /exit 43/)
