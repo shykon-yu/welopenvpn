@@ -17,6 +17,7 @@ const LOG_DIRECTORY = path.join(process.env.LOCALAPPDATA || app.getPath('userDat
 const LOG_FILE = path.join(LOG_DIRECTORY, 'main.log')
 
 let mainWindow = null
+let isQuitting = false
 
 function writeLog(message, error) {
   try {
@@ -46,6 +47,11 @@ function createWindow() {
     title: `WEL职业联盟对战平台 v${appVersion}`,
     backgroundColor: '#f4f7f6',
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: false },
+  })
+  mainWindow.on('close', (event) => {
+    if (isQuitting) return
+    event.preventDefault()
+    mainWindow.minimize()
   })
   mainWindow.on('closed', () => { mainWindow = null })
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
@@ -183,5 +189,8 @@ app.whenReady()
     showFatalError(error)
     app.quit()
   })
-app.on('before-quit', () => openvpn.stopConnection())
+app.on('before-quit', () => {
+  isQuitting = true
+  openvpn.stopConnection()
+})
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
