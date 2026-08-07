@@ -215,6 +215,7 @@ ipcMain.handle('copy-openvpn-diagnostics', async (_event, { subnetCidr, username
     `房间网段: ${subnetCidr}`,
     `实际虚拟IP: ${network.actualIp || '未获取'}`,
     `虚拟网卡: ${network.adapterDescription || network.adapterName || '未识别'}`,
+    `虚拟网卡MAC: ${network.macAddress || '未获取'}`,
     `VPN接口跃点: ${network.interfaceMetric ?? '未知'}`,
     `诊断提示: ${network.warnings.join('；') || '无'}`,
     `WE8网络: ${gameNetwork}`,

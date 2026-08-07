@@ -54,7 +54,7 @@ function decodeField(value) {
 function parseAdapterOutput(output) {
   return String(output || '').split(/\r?\n/).map((line) => {
     const fields = line.trim().split('|')
-    if (fields.length !== 8) return null
+    if (fields.length !== 9) return null
     return {
       description: decodeField(fields[0]),
       ipEnabled: fields[1].toLowerCase() === 'true',
@@ -64,6 +64,7 @@ function parseAdapterOutput(output) {
       subnets: decodeField(fields[5]).split(',').filter(Boolean),
       defaultGateways: decodeField(fields[6]).split(',').filter(Boolean),
       dnsServers: decodeField(fields[7]).split(',').filter(Boolean),
+      macAddress: decodeField(fields[8]) || null,
     }
   }).filter(Boolean)
 }
@@ -180,7 +181,8 @@ Get-WmiObject Win32_NetworkAdapterConfiguration | ForEach-Object {
     (Encode-Value ($_.IPAddress -join ',')),
     (Encode-Value ($_.IPSubnet -join ',')),
     (Encode-Value ($_.DefaultIPGateway -join ',')),
-    (Encode-Value ($_.DNSServerSearchOrder -join ','))
+    (Encode-Value ($_.DNSServerSearchOrder -join ',')),
+    (Encode-Value $_.MACAddress)
   )
   [Console]::Out.WriteLine($fields -join '|')
 }`
@@ -219,6 +221,7 @@ function analyzeNetwork(cidr, roomAddress, adapters) {
     interfaceMetric: roomAdapter?.interfaceMetric ?? null,
     defaultGateways: roomAdapter?.defaultGateways || [],
     dnsServers: roomAdapter?.dnsServers || [],
+    macAddress: roomAdapter?.macAddress || null,
     conflictingAdapters,
     conflictingAdapterIndexes,
     warnings,

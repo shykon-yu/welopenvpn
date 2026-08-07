@@ -17,6 +17,7 @@ export type DesktopLeaseStatus = {
   interfaceMetric: number | null
   defaultGateways: string[]
   dnsServers: string[]
+  macAddress: string | null
   conflictingAdapters: string[]
   conflictingAdapterIndexes: number[]
   warnings: string[]

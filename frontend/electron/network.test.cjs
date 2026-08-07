@@ -49,13 +49,14 @@ test('reports stale gateway and enabled conflicting adapters', () => {
 
 test('parses base64 encoded PowerShell adapter fields', () => {
   const encode = (value) => Buffer.from(value, 'utf8').toString('base64')
-  const output = `${encode('WEL TAP')}|True|18|25|${encode('10.80.1.10')}|${encode('255.255.255.0')}||\n`
+  const output = `${encode('WEL TAP')}|True|18|25|${encode('10.80.1.10')}|${encode('255.255.255.0')}|||${encode('00:FF:12:34:56:78')}\n`
   const adapters = parseAdapterOutput(output)
   assert.equal(adapters.length, 1)
   assert.equal(adapters[0].description, 'WEL TAP')
   assert.equal(adapters[0].interfaceIndex, 18)
   assert.equal(adapters[0].interfaceMetric, 25)
   assert.deepEqual(adapters[0].defaultGateways, [])
+  assert.equal(adapters[0].macAddress, '00:FF:12:34:56:78')
 })
 
 test('parses interface index and metric from localized netsh output', () => {
