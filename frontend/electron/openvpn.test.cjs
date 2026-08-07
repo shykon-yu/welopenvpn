@@ -3,7 +3,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const os = require('node:os')
-const { CONNECT_MAX_ATTEMPTS, CONNECT_TIMEOUT_MS, OPENVPN_DATA_CIPHERS, OPENVPN_FALLBACK_CIPHER, OPENVPN_PROGRESS, OPENVPN_REMOTE_CERT_EKU, isWelTapAdapter, isRetryableConnectError, openVpnConfigPath, parseTapctlList, readRecentLog, selectWelTapAdapter } = require('./openvpn.cjs')
+const { CONNECT_MAX_ATTEMPTS, CONNECT_TIMEOUT_MS, OPENVPN_DATA_CIPHERS, OPENVPN_FALLBACK_CIPHER, OPENVPN_PROGRESS, OPENVPN_REMOTE_CERT_EKU, isWelTapAdapter, isRetryableConnectError, openVpnConfigPath, parseTapGuid, parseTapctlList, readRecentLog, selectWelTapAdapter } = require('./openvpn.cjs')
 
 test('uses OpenVPN-safe paths in generated config values', () => {
   assert.equal(
@@ -71,9 +71,14 @@ test('parses and reuses Windows-assigned WEL network connection names', () => {
   assert.equal(isWelTapAdapter('WEL TAP 17'), true)
   assert.equal(isWelTapAdapter('WEL TAP'), true)
   assert.equal(isWelTapAdapter('WEL Virtual LAN'), true)
+  assert.equal(isWelTapAdapter('WEL Virtual LAN 2'), true)
   assert.equal(isWelTapAdapter('Other TAP 17'), false)
   assert.equal(selectWelTapAdapter(adapters).name, 'WEL TAP')
   assert.equal(selectWelTapAdapter(adapters.slice(1)).name, 'WEL TAP 17')
+  assert.equal(selectWelTapAdapter([
+    { guid: '{BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB}', name: 'WEL Virtual LAN 2' },
+  ]).name, 'WEL Virtual LAN 2')
+  assert.equal(parseTapGuid('Adapter {CCCCCCCC-CCCC-CCCC-CCCC-CCCCCCCCCCCC} created'), '{cccccccc-cccc-cccc-cccc-cccccccccccc}')
 })
 
 test('keeps and dynamically selects the actual adapter name before connecting', () => {

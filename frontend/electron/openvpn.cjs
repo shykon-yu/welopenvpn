@@ -7,7 +7,7 @@ const { prioritizeVpnNetwork, runPowerShell, waitForVpnNetwork } = require('./ne
 const DEFAULT_HOST = '8.133.189.9'
 const DEFAULT_PORT = 12001
 const TAP_NAME = 'WEL Virtual LAN'
-const LEGACY_TAP_NAME = /^WEL TAP(?: \d+)?$/i
+const WEL_TAP_NAME = /^(?:WEL Virtual LAN|WEL TAP)(?: \d+)?$/i
 const OPENVPN_READY = /Initialization Sequence Completed/i
 const OPENVPN_PROGRESS = /(?:PUSH_REPLY|open_tun|tap-windows6 device \[.+?\] opened|Successful ARP Flush)/i
 const CONNECT_TIMEOUT_MS = 45000
@@ -66,7 +66,12 @@ function parseTapctlList(output) {
 
 function isWelTapAdapter(name) {
   const normalized = String(name || '').trim()
-  return normalized.toLowerCase() === TAP_NAME.toLowerCase() || LEGACY_TAP_NAME.test(normalized)
+  return WEL_TAP_NAME.test(normalized)
+}
+
+function parseTapGuid(output) {
+  const match = String(output || '').match(/\{([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})\}/i)
+  return match ? `{${match[1]}}`.toLowerCase() : null
 }
 
 function selectWelTapAdapter(adapters) {
@@ -152,14 +157,16 @@ async function prepare() {
     return { ...current, adapterReady: true, tapName: selected.name }
   }
 
-  await runTapctl(tapctl, ['create', '--hwid', 'root\\tap0901', '--name', TAP_NAME], 20000)
-  for (let attempt = 0; attempt < 20; attempt += 1) {
+  const createOutput = await runTapctl(tapctl, ['create', '--hwid', 'root\\tap0901', '--name', TAP_NAME], 20000)
+  const createdGuid = parseTapGuid(createOutput)
+  for (let attempt = 0; attempt < 40; attempt += 1) {
     adapters = await listTapAdapters(tapctl)
     adapter = selectWelTapAdapter(adapters)
+      || (createdGuid ? adapters.find(({ guid }) => guid.toLowerCase() === createdGuid) : null)
     if (adapter) {
       return { ...current, adapterReady: true, tapName: adapter.name }
     }
-    await wait(300)
+    await wait(500)
   }
   throw new Error('WEL 虚拟网卡创建后未被 Windows 识别，请重启电脑后重试')
 }
@@ -445,6 +452,7 @@ module.exports = {
   isWelTapAdapter,
   isRetryableConnectError,
   openVpnConfigPath,
+  parseTapGuid,
   parseTapctlList,
   prepare,
   readRecentLog,
