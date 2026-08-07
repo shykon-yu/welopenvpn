@@ -15,7 +15,10 @@ const CONNECT_MAX_ATTEMPTS = 4
 const OPENVPN_DATA_CIPHERS = 'AES-256-GCM:AES-128-GCM:AES-256-CBC'
 const OPENVPN_FALLBACK_CIPHER = 'AES-256-CBC'
 const OPENVPN_REMOTE_CERT_EKU = 'TLS Web Server Authentication'
-const LOG_DIRECTORY = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'WELPlatform', 'logs')
+const APP_DATA_DIRECTORY = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'WELPlatform')
+const LOG_DIRECTORY = path.join(APP_DATA_DIRECTORY, 'logs')
+const TAP_STATE_PATH = path.join(APP_DATA_DIRECTORY, 'tap-adapter.json')
+const INSTALLER_TAP_STATE_PATH = path.join(process.env.PROGRAMDATA || 'C:\\ProgramData', 'WELPlatform', 'tap-create.txt')
 const MANAGEMENT_HOST = '127.0.0.1'
 const MANAGEMENT_STOP_TIMEOUT_MS = 3000
 
@@ -74,6 +77,29 @@ function parseTapGuid(output) {
   return match ? `{${match[1]}}`.toLowerCase() : null
 }
 
+function readRememberedTapGuid() {
+  try {
+    const state = JSON.parse(fs.readFileSync(TAP_STATE_PATH, 'utf8'))
+    const guid = parseTapGuid(state.guid)
+    if (guid) return guid
+  } catch {}
+  try {
+    return parseTapGuid(fs.readFileSync(INSTALLER_TAP_STATE_PATH, 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+function rememberTapAdapter(adapter) {
+  try {
+    fs.mkdirSync(APP_DATA_DIRECTORY, { recursive: true })
+    fs.writeFileSync(TAP_STATE_PATH, JSON.stringify({ guid: adapter.guid, name: adapter.name }), 'utf8')
+  } catch {
+    // Remembering is an optimization; the current connection can still use
+    // the adapter GUID returned by tapctl.
+  }
+}
+
 function selectWelTapAdapter(adapters) {
   const owned = adapters.filter(({ name }) => isWelTapAdapter(name))
   return owned.find(({ name }) => name.toLowerCase() === TAP_NAME.toLowerCase())
@@ -113,30 +139,6 @@ async function listTapAdapters(tapctl) {
   return parseTapctlList(await runTapctl(tapctl, ['list']))
 }
 
-async function deleteOtherWelTaps(tapctl, adapters, keepGuid) {
-  for (const adapter of adapters.filter(({ guid, name }) => guid !== keepGuid && isWelTapAdapter(name))) {
-    try {
-      await runTapctl(tapctl, ['delete', adapter.guid])
-    } catch {
-      // A stale adapter can still be busy during startup. It must not prevent
-      // reuse of the primary WEL TAP adapter.
-    }
-  }
-}
-
-async function renameWelTap(tapctl, adapter) {
-  if (adapter.name.toLowerCase() === TAP_NAME.toLowerCase()) return adapter
-  const netsh = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'netsh.exe')
-  try {
-    await runTapctl(netsh, ['interface', 'set', 'interface', `name=${adapter.name}`, `newname=${TAP_NAME}`])
-    const adapters = await listTapAdapters(tapctl)
-    return adapters.find(({ name }) => name.toLowerCase() === TAP_NAME.toLowerCase()) || adapter
-  } catch {
-    // The connection can still be used under the Windows-assigned name.
-    return adapter
-  }
-}
-
 async function prepare() {
   const current = status()
   if (!current.ready) throw new Error(current.message)
@@ -146,25 +148,24 @@ async function prepare() {
   if (!tapctl) throw new Error('未检测到 WEL 虚拟网卡管理组件，请重新安装客户端')
 
   let adapters = await listTapAdapters(tapctl)
-  let adapter = selectWelTapAdapter(adapters)
+  const rememberedGuid = readRememberedTapGuid()
+  let adapter = (rememberedGuid
+    ? adapters.find(({ guid }) => guid.toLowerCase() === rememberedGuid)
+    : null) || selectWelTapAdapter(adapters)
   if (adapter) {
-    adapter = await renameWelTap(tapctl, adapter)
-    adapters = await listTapAdapters(tapctl)
-    const selected = selectWelTapAdapter(adapters) || adapter
-    if (selected.name.toLowerCase() === TAP_NAME.toLowerCase()) {
-      await deleteOtherWelTaps(tapctl, adapters, selected.guid)
-    }
-    return { ...current, adapterReady: true, tapName: selected.name }
+    rememberTapAdapter(adapter)
+    return { ...current, adapterReady: true, tapName: adapter.name, tapNode: adapter.guid }
   }
 
   const createOutput = await runTapctl(tapctl, ['create', '--hwid', 'root\\tap0901', '--name', TAP_NAME], 20000)
   const createdGuid = parseTapGuid(createOutput)
   for (let attempt = 0; attempt < 40; attempt += 1) {
     adapters = await listTapAdapters(tapctl)
-    adapter = selectWelTapAdapter(adapters)
-      || (createdGuid ? adapters.find(({ guid }) => guid.toLowerCase() === createdGuid) : null)
+    adapter = (createdGuid ? adapters.find(({ guid }) => guid.toLowerCase() === createdGuid) : null)
+      || selectWelTapAdapter(adapters)
     if (adapter) {
-      return { ...current, adapterReady: true, tapName: adapter.name }
+      rememberTapAdapter(adapter)
+      return { ...current, adapterReady: true, tapName: adapter.name, tapNode: adapter.guid }
     }
     await wait(500)
   }
@@ -210,7 +211,7 @@ function bundledCaPath() {
   return candidates.find((candidate) => fs.existsSync(candidate)) || null
 }
 
-function buildConfig({ host, port, username, token, roomID, subnetCidr, tapName = TAP_NAME }) {
+function buildConfig({ host, port, username, token, roomID, subnetCidr, tapNode = TAP_NAME }) {
   const caPath = bundledCaPath()
   if (!caPath) throw new Error('联机证书未随客户端安装，请重新安装 WEL职业联盟对战平台')
   const runtime = ensureRuntimeDirectory()
@@ -224,7 +225,7 @@ function buildConfig({ host, port, username, token, roomID, subnetCidr, tapName 
   const config = [
     'client',
     'dev tap',
-    `dev-node "${tapName}"`,
+    `dev-node "${tapNode}"`,
     'proto udp4',
     'explicit-exit-notify 1',
     `remote ${host} ${port}`,
@@ -361,7 +362,7 @@ Get-WmiObject Win32_Process -Filter "Name = 'openvpn.exe'" |
   }
 }
 
-async function connectAttempt({ executable, host, port, roomID, username, token, subnetCidr, tapName }) {
+async function connectAttempt({ executable, host, port, roomID, username, token, subnetCidr, tapNode }) {
   await stopConnection()
   const files = buildConfig({
     host: host || DEFAULT_HOST,
@@ -370,7 +371,7 @@ async function connectAttempt({ executable, host, port, roomID, username, token,
     token,
     roomID,
     subnetCidr,
-    tapName,
+    tapNode,
   })
   const child = spawn(executable, ['--config', files.configPath], { windowsHide: true })
   const output = []
@@ -428,7 +429,7 @@ async function connect({ host, port, roomID, username, token, subnetCidr }) {
   let lastError = null
   for (let attempt = 1; attempt <= CONNECT_MAX_ATTEMPTS; attempt += 1) {
     try {
-      return await connectAttempt({ executable, host, port, roomID, username, token, subnetCidr, tapName: prepared.tapName })
+      return await connectAttempt({ executable, host, port, roomID, username, token, subnetCidr, tapNode: prepared.tapNode })
     } catch (error) {
       lastError = error
       if (attempt >= CONNECT_MAX_ATTEMPTS || !isRetryableConnectError(error)) throw error

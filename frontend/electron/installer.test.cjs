@@ -14,6 +14,9 @@ test('bundles the OpenVPN runtime and installs only the official Win7 TAP packag
   assert.doesNotMatch(installer, /Drivers\.Wintun|OpenVPN GUI.*ADDLOCAL/)
   assert.match(installer, /resources\\openvpn\\bin\\openvpn\.exe/)
   assert.match(installer, /tapctl\.exe" create --hwid "root\\tap0901" --name "WEL Virtual LAN"/)
+  assert.match(installer, /\$APPDATA\\WELPlatform\\tap-create\.txt/)
+  assert.match(installer, /FileWrite \$4 "\$3"/)
+  assert.match(installer, /findstr\.exe" \/I \/L \/G:"\$APPDATA\\WELPlatform\\tap-create\.txt"/)
   assert.doesNotMatch(installer, /ensure-wel-tap\.ps1|remove-wel-tap\.ps1/)
 })
 

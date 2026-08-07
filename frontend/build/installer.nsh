@@ -51,6 +51,13 @@ cleanup_gui_done:
   SetShellVarContext all
 
   DetailPrint "正在准备 WEL 虚拟网卡..."
+  IfFileExists "$APPDATA\WELPlatform\tap-create.txt" 0 check_named_tap
+  nsExec::ExecToStack '"$SYSDIR\cmd.exe" /D /S /C ""$INSTDIR\resources\openvpn\bin\tapctl.exe" list | "$SYSDIR\findstr.exe" /I /L /G:"$APPDATA\WELPlatform\tap-create.txt""'
+  Pop $2
+  Pop $3
+  StrCmp $2 "0" tap_ready
+
+check_named_tap:
   nsExec::ExecToStack '"$SYSDIR\cmd.exe" /D /S /C ""$INSTDIR\resources\openvpn\bin\tapctl.exe" list | "$SYSDIR\findstr.exe" /L /C:"WEL Virtual LAN" /C:"WEL TAP""'
   Pop $2
   Pop $3
@@ -58,9 +65,10 @@ cleanup_gui_done:
 
   ; Reuse an existing tap0901 driver when possible. This avoids replacing a
   ; working driver owned by another platform and prevents needless prompts.
-  nsExec::ExecToLog '"$INSTDIR\resources\openvpn\bin\tapctl.exe" create --hwid "root\tap0901" --name "WEL Virtual LAN"'
+  nsExec::ExecToStack '"$INSTDIR\resources\openvpn\bin\tapctl.exe" create --hwid "root\tap0901" --name "WEL Virtual LAN"'
   Pop $2
-  StrCmp $2 "0" tap_ready
+  Pop $3
+  StrCmp $2 "0" remember_created_tap
   Goto install_tap_driver
 
 install_tap_driver:
@@ -80,11 +88,21 @@ tap_driver_installed:
 
 create_driver_tap:
   Sleep 1000
-  nsExec::ExecToLog '"$INSTDIR\resources\openvpn\bin\tapctl.exe" create --hwid "root\tap0901" --name "WEL Virtual LAN"'
+  nsExec::ExecToStack '"$INSTDIR\resources\openvpn\bin\tapctl.exe" create --hwid "root\tap0901" --name "WEL Virtual LAN"'
   Pop $2
-  StrCmp $2 "0" tap_ready
+  Pop $3
+  StrCmp $2 "0" remember_created_tap
   IntOp $4 $4 + 1
   IntCmp $4 20 tap_requires_reboot create_driver_tap tap_requires_reboot
+
+remember_created_tap:
+  ; OpenVPN 2.5 accepts the adapter GUID directly. Remember it so localized
+  ; Windows names such as "本地连接 8" never need to be placed in the config.
+  CreateDirectory "$APPDATA\WELPlatform"
+  FileOpen $4 "$APPDATA\WELPlatform\tap-create.txt" w
+  FileWrite $4 "$3"
+  FileClose $4
+  Goto tap_ready
 
 tap_requires_reboot:
   ; Win7 can delay publishing a newly installed network driver until reboot.

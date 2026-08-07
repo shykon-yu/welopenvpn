@@ -84,8 +84,9 @@ test('parses and reuses Windows-assigned WEL network connection names', () => {
 test('keeps and dynamically selects the actual adapter name before connecting', () => {
   const client = fs.readFileSync(path.join(__dirname, 'openvpn.cjs'), 'utf8')
   assert.match(client, /runTapctl\(tapctl, \['create', '--hwid', 'root\\\\tap0901', '--name', TAP_NAME\]/)
-  assert.match(client, /runTapctl\(tapctl, \['delete', adapter\.guid\]\)/)
-  assert.match(client, /`dev-node "\$\{tapName\}"`/)
-  assert.match(client, /newname=\$\{TAP_NAME\}/)
+  assert.match(client, /`dev-node "\$\{tapNode\}"`/)
+  assert.match(client, /tapNode: adapter\.guid/)
+  assert.match(client, /readRememberedTapGuid\(\)/)
+  assert.doesNotMatch(client, /newname=/)
   assert.match(client, /await prepare\(\)/)
 })
