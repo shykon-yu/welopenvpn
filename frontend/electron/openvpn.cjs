@@ -95,6 +95,7 @@ function buildConfig({ host, port, username, token, roomID, subnetCidr }) {
     'nobind',
     'persist-key',
     'persist-tun',
+    'ip-win32 netsh',
     'auth-nocache',
     `auth-user-pass "${openVpnConfigPath(authPath)}"`,
     `ca "${openVpnConfigPath(caPath)}"`,

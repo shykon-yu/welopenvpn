@@ -10,9 +10,11 @@
 
 install_openvpn:
   DetailPrint "正在安装 WEL 联机组件..."
-  ; Report one existing TAP adapter so the MSI installs the signed driver but
-  ; does not create its own extra adapter. WEL creates the only owned adapter.
-  nsExec::ExecToLog '"$SYSDIR\msiexec.exe" /i "$PLUGINSDIR\wel-openvpn.msi" /qn /norestart TAPWINDOWS6ADAPTERS=1'
+  ; Install only the OpenVPN runtime and the layer-2 TAP driver used by WE8.
+  ; Leaving Wintun and the OpenVPN GUI out also avoids unused adapters and
+  ; startup entries. The MSI creates the first TAP adapter so Windows 7 does
+  ; not need an immediate driver-backed delete/recreate cycle.
+  nsExec::ExecToLog '"$SYSDIR\msiexec.exe" /i "$PLUGINSDIR\wel-openvpn.msi" /qn /norestart ADDLOCAL=OpenVPN,Drivers,Drivers.TAPWindows6'
   Pop $0
   StrCmp $0 "0" openvpn_ready
   MessageBox MB_ICONSTOP|MB_OK "WEL 联机组件安装失败（错误代码：$0），请重新运行安装包并同意管理员授权。"
@@ -57,11 +59,11 @@ cleanup_gui_done:
   SetShellVarContext all
 
   IfFileExists "$PROGRAMFILES64\OpenVPN\bin\tapctl.exe" 0 tapctl_missing
-  DetailPrint "正在重置 WEL 虚拟网卡..."
+  DetailPrint "正在准备 WEL 虚拟网卡..."
   nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\ensure-wel-tap.ps1" -TapctlPath "$PROGRAMFILES64\OpenVPN\bin\tapctl.exe"'
   Pop $2
   StrCmp $2 "0" tap_ready
-  MessageBox MB_ICONSTOP|MB_OK "WEL 虚拟网卡重置失败（错误代码：$2）。如果电脑装过其他联机平台，请保留其网卡并重新运行本安装包。"
+  MessageBox MB_ICONSTOP|MB_OK "WEL 虚拟网卡准备失败（错误代码：$2）。请重新运行安装包并同意驱动安装；Windows 7 还需要系统已安装 SHA-2 驱动签名更新。"
   Abort
 
 tapctl_missing:

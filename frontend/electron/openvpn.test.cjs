@@ -17,6 +17,11 @@ test('sends explicit exit notify to shrink stale UDP sessions on reconnect', () 
   assert.match(client, /'explicit-exit-notify 1'/)
 })
 
+test('configures the TAP address statically instead of using DHCP emulation', () => {
+  const client = fs.readFileSync(path.join(__dirname, 'openvpn.cjs'), 'utf8')
+  assert.match(client, /'ip-win32 netsh'/)
+})
+
 test('keeps client and server cipher settings aligned', () => {
   const generator = fs.readFileSync(path.join(__dirname, '..', '..', 'deploy', 'openvpn', 'generate-room-configs.sh'), 'utf8')
   assert.match(generator, new RegExp(`data-ciphers ${OPENVPN_DATA_CIPHERS.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`))

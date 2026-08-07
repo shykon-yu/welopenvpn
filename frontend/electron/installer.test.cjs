@@ -8,24 +8,27 @@ const ensureTap = fs.readFileSync(path.join(__dirname, '..', 'build', 'ensure-we
 const removeTap = fs.readFileSync(path.join(__dirname, '..', 'build', 'remove-wel-tap.ps1'), 'utf8')
 const cleanupOpenVpnGui = fs.readFileSync(path.join(__dirname, '..', 'build', 'cleanup-openvpn-gui.ps1'), 'utf8')
 
-test('installs the TAP driver without creating an extra MSI-owned adapter', () => {
-  assert.match(installer, /TAPWINDOWS6ADAPTERS=1/)
+test('installs only the OpenVPN runtime and layer-2 TAP driver', () => {
+  assert.match(installer, /ADDLOCAL=OpenVPN,Drivers,Drivers\.TAPWindows6/)
+  assert.doesNotMatch(installer, /TAPWINDOWS6ADAPTERS=/)
+  assert.doesNotMatch(installer, /ADDLOCAL=[^\r\n]*Drivers\.Wintun/)
   assert.match(installer, /ensure-wel-tap\.ps1/)
   assert.match(ensureTap, /create --hwid 'root\\tap0901' --name 'WEL TAP'/)
 })
 
-test('resets numbered WEL TAP adapters during install and uninstall', () => {
-  assert.match(ensureTap, /for \(\$i = 2; \$i -le 50; \$i\+\+\)/)
-  assert.match(ensureTap, /& \$TapctlPath delete \$name/)
+test('reuses WEL TAP across upgrades and removes numbered duplicates', () => {
+  assert.match(ensureTap, /NetConnectionID -eq 'WEL TAP'/)
+  assert.match(ensureTap, /Remove-NumberedWelTapAdapters/)
+  assert.match(ensureTap, /NetConnectionID -match '\^WEL TAP \\d\+\$'/)
+  assert.match(ensureTap, /Get-WmiObject -Class Win32_NetworkAdapter/)
+  assert.doesNotMatch(ensureTap, /Get-NetAdapter/)
   assert.match(removeTap, /for \(\$i = 2; \$i -le 50; \$i\+\+\)/)
   assert.match(removeTap, /& \$TapctlPath delete \$name/)
 })
 
-test('keeps the Windows network connection name pinned to WEL TAP', () => {
-  assert.match(ensureTap, /Release-WelTapConnectionNames/)
-  assert.match(ensureTap, /Rename-NetAdapter -Name \$adapter\.Name -NewName 'WEL TAP'/)
+test('keeps the Windows network connection name pinned to WEL TAP on Windows 7', () => {
+  assert.match(ensureTap, /Set-TapConnectionName/)
   assert.match(ensureTap, /Set-ItemProperty -LiteralPath \$connectionKey -Name 'Name'/)
-  assert.match(ensureTap, /\^WEL TAP\( \\d\+\)\?\$/)
   assert.match(removeTap, /Release-WelTapConnectionNames/)
 })
 
