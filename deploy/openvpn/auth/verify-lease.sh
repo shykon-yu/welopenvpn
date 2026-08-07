@@ -22,3 +22,12 @@ printf '%s' "$response" | jq -e \
   --argjson room_id "$room_id" \
   '.lease != null and .lease.room_id == $room_id and .lease.username == $username' \
   >/dev/null
+
+virtual_ip=$(printf '%s' "$response" | jq -r '.lease.virtual_ip // empty')
+[[ "$virtual_ip" =~ ^10\.80\.[0-9]{1,3}\.[0-9]{1,3}$ ]] || exit 1
+
+ccd_dir="/run/welopenvpn/ccd/room-${room_id}"
+mkdir -p "$ccd_dir"
+tmp_file=$(mktemp "${ccd_dir}/.${username}.XXXXXX")
+printf 'ifconfig-push %s 255.255.255.0\n' "$virtual_ip" >"$tmp_file"
+mv "$tmp_file" "${ccd_dir}/${username}"
