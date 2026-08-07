@@ -85,6 +85,8 @@ test('builds a protected command for disabling conflicting adapters', () => {
   assert.match(script, /Win32_NetworkAdapter/)
   assert.match(script, /NetConnectionID/)
   assert.match(script, /interface set interface name="\$name" admin=disabled/)
+  assert.match(script, /Disable-NetAdapter -Name \$name/)
+  assert.match(script, /\$adapter\.Disable\(\)/)
   assert.equal(buildDisableConflictingAdaptersScript([], 18), 'exit 0')
 })
 

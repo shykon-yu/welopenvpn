@@ -407,8 +407,9 @@ async function launchGame() {
   if (!gamePath.value.trim()) { errorMessage.value = '请先选择 WE8 游戏程序路径'; return }
   if (!desktop()) { notice.value = '浏览器预览不会启动本机程序，请在 Windows 客户端测试'; return }
   try {
-    networkStatus.value = await inspectAndMaybePrioritizeVpn(activeLease.value)
-    if (!networkStatus.value) return
+    const checkedStatus = await inspectAndMaybePrioritizeVpn(activeLease.value)
+    if (!checkedStatus) return
+    networkStatus.value = checkedStatus
     if (!(await ensureGameFirewall(gamePath.value))) return
     await desktop()!.launchGame(gamePath.value)
   } catch (error) { errorMessage.value = messageOf(error) }

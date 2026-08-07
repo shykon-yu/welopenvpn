@@ -278,9 +278,19 @@ foreach ($target in $targets) {
   $adapter = Get-WmiObject Win32_NetworkAdapter | Where-Object { $_.InterfaceIndex -eq $target } | Select-Object -First 1
   if ($null -eq $adapter) { continue }
   $name = [string]$adapter.NetConnectionID
+  $disabled = $false
   if ([string]::IsNullOrWhiteSpace($name)) { continue }
   & $netsh interface set interface name="$name" admin=disabled | Out-Null
-  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  if ($LASTEXITCODE -eq 0) { $disabled = $true }
+  if (-not $disabled) {
+    Disable-NetAdapter -Name $name -Confirm:$false -ErrorAction SilentlyContinue
+    $disabled = $?
+  }
+  if (-not $disabled) {
+    $result = $adapter.Disable()
+    $disabled = ($null -ne $result -and $result.ReturnValue -eq 0)
+  }
+  if (-not $disabled) { exit 1 }
 }
 exit 0
 `
