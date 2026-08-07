@@ -1,7 +1,8 @@
 !macro customInstall
   SetOutPath "$PLUGINSDIR"
   File /oname=cleanup-openvpn-gui.ps1 "${BUILD_RESOURCES_DIR}\cleanup-openvpn-gui.ps1"
-  File /oname=wel-tap.msi "${BUILD_RESOURCES_DIR}\OpenVPN-2.5.10-I601-amd64.msi"
+  File /oname=remove-wel-openvpn-msi.ps1 "${BUILD_RESOURCES_DIR}\remove-wel-openvpn-msi.ps1"
+  File /oname=wel-tap-win7.exe "${BUILD_RESOURCES_DIR}\tap-windows-9.24.7-I601-Win7.exe"
 
   ; OpenVPN runs directly from the application resources directory. Only the
   ; signed TAP-Windows driver is installed into Windows.
@@ -13,8 +14,24 @@ runtime_missing:
   Abort
 
 runtime_ready:
+  ; 0.1.40 briefly used the full OpenVPN MSI for TAP registration. Remove only
+  ; installations marked by WEL before returning to the standalone TAP path.
+  SetShellVarContext all
+  IfFileExists "$APPDATA\WELPlatform\tap-msi-2.5.10.ready" 0 cleanup_msi_done
+  IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 cleanup_msi_system32
+  nsExec::ExecToLog '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\remove-wel-openvpn-msi.ps1" -TapctlPath "$INSTDIR\resources\openvpn\bin\tapctl.exe"'
+  Pop $4
+  Goto cleanup_msi_result
+cleanup_msi_system32:
+  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\remove-wel-openvpn-msi.ps1" -TapctlPath "$INSTDIR\resources\openvpn\bin\tapctl.exe"'
+  Pop $4
+cleanup_msi_result:
+  StrCmp $4 "0" cleanup_msi_done
+  MessageBox MB_ICONSTOP|MB_OK "旧版 OpenVPN 组件清理失败（错误代码：$4）。请在控制面板卸载 OpenVPN 2.5.10 后重新运行本安装包。"
+  Abort
+cleanup_msi_done:
   ; Clean startup entries left by older WEL releases that installed the full
-  ; OpenVPN feature set. The current MSI invocation installs TAP-Windows only.
+  ; OpenVPN feature set. The current helper installs TAP-Windows only.
   nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /F /IM openvpn-gui.exe'
   Pop $3
   IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 cleanup_gui_system32
@@ -50,12 +67,6 @@ cleanup_gui_done:
   SetRegView lastused
   SetShellVarContext all
 
-  ; Migrate every installation once from the standalone TAP package to the
-  ; official OpenVPN MSI driver registration path. Later upgrades can reuse it.
-  StrCpy $5 0
-  IfFileExists "$APPDATA\WELPlatform\tap-msi-2.5.10.ready" prepare_tap install_tap_driver
-
-prepare_tap:
   DetailPrint "正在准备 WEL 虚拟网卡..."
   IfFileExists "$APPDATA\WELPlatform\tap-create.txt" 0 check_named_tap
   nsExec::ExecToStack '"$SYSDIR\cmd.exe" /D /S /C ""$INSTDIR\resources\openvpn\bin\tapctl.exe" list | "$SYSDIR\findstr.exe" /I /L /G:"$APPDATA\WELPlatform\tap-create.txt""'
@@ -75,30 +86,21 @@ check_named_tap:
   Pop $2
   Pop $3
   StrCmp $2 "0" remember_created_tap
-  StrCmp $5 "1" retry_driver_tap
   Goto install_tap_driver
 
 install_tap_driver:
-  DetailPrint "正在安装官方 OpenVPN 2.5 TAP-Windows 驱动..."
-  nsExec::ExecToLog '"$SYSDIR\msiexec.exe" /i "$PLUGINSDIR\wel-tap.msi" /qn /norestart ADDLOCAL=Drivers,Drivers.TAPWindows6 /L*v "$TEMP\WEL-TAP-install.log"'
+  DetailPrint "正在安装官方 Win7 TAP-Windows 驱动..."
+  nsExec::ExecToLog '"$PLUGINSDIR\wel-tap-win7.exe" /S'
   Pop $2
   StrCmp $2 "0" tap_driver_installed
   StrCmp $2 "1641" tap_driver_installed
   StrCmp $2 "3010" tap_driver_installed
-  MessageBox MB_ICONSTOP|MB_OK "WEL 虚拟网卡驱动安装失败（错误代码：$2）。请确认 Windows 7 已安装 SP1 和 SHA-2 更新。安装日志：$TEMP\WEL-TAP-install.log"
+  MessageBox MB_ICONSTOP|MB_OK "WEL 虚拟网卡驱动安装失败（错误代码：$2）。请确认 Windows 7 已安装 SP1 和 SHA-2 更新。"
   Abort
 
 tap_driver_installed:
-  CreateDirectory "$APPDATA\WELPlatform"
-  FileOpen $4 "$APPDATA\WELPlatform\tap-msi-2.5.10.ready" w
-  FileWrite $4 "OpenVPN-2.5.10-I601 TAPWindows6"
-  FileClose $4
-  StrCpy $5 1
-  Goto prepare_tap
-
-retry_driver_tap:
-  ; The Win7-compatible MSI can return before Plug and Play has published the
-  ; driver. Retry device creation instead of immediately requiring reboot.
+  ; The TAP-only Win7 package can return before Plug and Play has published
+  ; the driver. Retry device creation instead of immediately requiring reboot.
   StrCpy $4 0
 
 create_driver_tap:
