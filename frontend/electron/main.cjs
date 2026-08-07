@@ -5,7 +5,7 @@ const path = require('node:path')
 const { pathToFileURL } = require('node:url')
 const { version: appVersion } = require('../package.json')
 const { configureGameFirewall } = require('./firewall.cjs')
-const { decodeProcessOutput, findNetstatLines, inspectVpnNetwork, parseTasklistPids, prioritizeVpnNetwork, runProcess } = require('./network.cjs')
+const { decodeProcessOutput, disableConflictingAdapters, findNetstatLines, inspectVpnNetwork, parseTasklistPids, prioritizeVpnNetwork, runProcess } = require('./network.cjs')
 const openvpn = require('./openvpn.cjs')
 
 if (process.platform === 'win32') {
@@ -144,6 +144,7 @@ ipcMain.handle('connect-openvpn', async (_event, credentials) => openvpn.connect
 ipcMain.handle('disconnect-openvpn', () => openvpn.stopConnection())
 ipcMain.handle('inspect-openvpn', (_event, { subnetCidr }) => inspectVpnNetwork(subnetCidr))
 ipcMain.handle('prioritize-openvpn', (_event, { subnetCidr }) => prioritizeVpnNetwork(subnetCidr))
+ipcMain.handle('disable-conflicting-adapters', (_event, { subnetCidr }) => disableConflictingAdapters(subnetCidr))
 ipcMain.handle('ping-host', (_event, host) => pingHost(host))
 ipcMain.handle('configure-game-firewall', (_event, gamePath) => configureGameFirewall(resolveGameExecutable(gamePath)))
 ipcMain.handle('choose-game', async (event) => {

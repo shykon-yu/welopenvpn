@@ -354,26 +354,45 @@ function vpnPriorityPrompt(status: DesktopLeaseStatus) {
   ].filter(Boolean).join('\n\n')
 }
 
-function shouldContinueWithConflictingAdapters(status: DesktopLeaseStatus) {
-  if (!status.conflictingAdapters.length) return true
-  return window.confirm([
+async function disableConflictingAdaptersBeforeLaunch(status: DesktopLeaseStatus, lease: Lease) {
+  if (!status.conflictingAdapters.length) return status
+  const shouldDisable = window.confirm([
     '检测到可能影响 WE8 搜房间的冲突虚拟网卡：',
     status.conflictingAdapters.join('、'),
     '',
-    '建议先取消启动，到 Windows 网络适配器里禁用这些网卡，然后重启电脑后再进入平台。',
-    '如果不处理，可能出现双方能 Ping 通，但游戏互相搜不到、同意后连不上的情况。',
+    '这些网卡可能导致双方能 Ping 通，但游戏互相搜不到、同意后连不上。',
+    '建议一键禁用这些控制面板网络连接里的冲突网卡，再启动 WE8。',
     '',
-    '仍然继续启动 WE8 吗？',
+    '点“确定”一键禁用冲突网卡。',
+    '点“取消”暂不启动，稍后可手动到控制面板网络连接中禁用。',
   ].join('\n'))
+  if (!shouldDisable) {
+    notice.value = '已取消启动；请禁用冲突虚拟网卡后再试'
+    return null
+  }
+
+  const updated = await desktop()!.disableConflictingAdapters({ username: lease.username, subnetCidr: lease.subnet_cidr })
+  if (updated.conflictingAdapters.length) {
+    window.alert([
+      '一键禁用冲突网卡没有成功。',
+      '',
+      `仍检测到：${updated.conflictingAdapters.join('、')}`,
+      '',
+      '请以管理员身份运行平台，或手动进入：控制面板 -> 网络和共享中心 -> 更改适配器设置，禁用这些冲突网卡后再启动 WE8。',
+    ].join('\n'))
+    notice.value = '请手动禁用冲突虚拟网卡后再启动游戏'
+    return null
+  }
+
+  notice.value = '已禁用冲突虚拟网卡，可以启动 WE8'
+  return updated
 }
 
 async function inspectAndMaybePrioritizeVpn(lease: Lease) {
-  const inspected = await desktop()!.inspectVpn({ username: lease.username, subnetCidr: lease.subnet_cidr })
+  let inspected: DesktopLeaseStatus | null = await desktop()!.inspectVpn({ username: lease.username, subnetCidr: lease.subnet_cidr })
   if (!inspected.connected) throw new Error('尚未获取房间虚拟 IP，请退出房间后重新进入')
-  if (!shouldContinueWithConflictingAdapters(inspected)) {
-    notice.value = '已取消启动；请禁用冲突虚拟网卡并重启电脑后再试'
-    return null
-  }
+  inspected = await disableConflictingAdaptersBeforeLaunch(inspected, lease)
+  if (!inspected) return null
   if (!needsVpnPriorityAdjustment(inspected)) return inspected
   if (!window.confirm(vpnPriorityPrompt(inspected))) {
     notice.value = '已跳过网卡优化；如果搜不到主机或连不上，请重新启动游戏并同意管理员授权'

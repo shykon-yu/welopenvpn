@@ -1,6 +1,6 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { analyzeNetwork, buildVpnPriorityScript, findNetstatLines, findRoomAddress, isIPv4InCIDR, parseAdapterOutput, parseNetshInterfaces, parseTasklistPids } = require('./network.cjs')
+const { analyzeNetwork, buildDisableConflictingAdaptersScript, buildVpnPriorityScript, findNetstatLines, findRoomAddress, isIPv4InCIDR, parseAdapterOutput, parseNetshInterfaces, parseTasklistPids } = require('./network.cjs')
 
 test('matches only addresses in the room subnet', () => {
   assert.equal(isIPv4InCIDR('10.80.3.10', '10.80.3.0/24'), true)
@@ -76,6 +76,16 @@ test('builds a Win7-compatible netsh command for the room adapter', () => {
   assert.equal((script.match(/interface=19/g) || []).length, 1)
   assert.match(script, /store=persistent/)
   assert.throws(() => buildVpnPriorityScript('invalid'), /接口编号无效/)
+})
+
+test('builds a protected command for disabling conflicting adapters', () => {
+  const script = buildDisableConflictingAdaptersScript([18, 19, 19, 20], 18)
+  assert.doesNotMatch(script, /18/)
+  assert.match(script, /\$targets = @\(19,20\)/)
+  assert.match(script, /Win32_NetworkAdapter/)
+  assert.match(script, /NetConnectionID/)
+  assert.match(script, /interface set interface name="\$name" admin=disabled/)
+  assert.equal(buildDisableConflictingAdaptersScript([], 18), 'exit 0')
 })
 
 test('parses WE8 tasklist rows and matches netstat endpoints by PID', () => {
