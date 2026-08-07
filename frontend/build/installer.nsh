@@ -1,7 +1,7 @@
 !macro customInstall
   SetOutPath "$PLUGINSDIR"
   File /oname=cleanup-openvpn-gui.ps1 "${BUILD_RESOURCES_DIR}\cleanup-openvpn-gui.ps1"
-  File /oname=wel-tap-win7.exe "${BUILD_RESOURCES_DIR}\tap-windows-9.24.7-I601-Win7.exe"
+  File /oname=wel-tap.msi "${BUILD_RESOURCES_DIR}\OpenVPN-2.5.10-I601-amd64.msi"
 
   ; OpenVPN runs directly from the application resources directory. Only the
   ; signed TAP-Windows driver is installed into Windows.
@@ -14,7 +14,7 @@ runtime_missing:
 
 runtime_ready:
   ; Clean startup entries left by older WEL releases that installed the full
-  ; OpenVPN feature set. The current helper installs TAP-Windows only.
+  ; OpenVPN feature set. The current MSI invocation installs TAP-Windows only.
   nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /F /IM openvpn-gui.exe'
   Pop $3
   IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 cleanup_gui_system32
@@ -50,6 +50,12 @@ cleanup_gui_done:
   SetRegView lastused
   SetShellVarContext all
 
+  ; Migrate every installation once from the standalone TAP package to the
+  ; official OpenVPN MSI driver registration path. Later upgrades can reuse it.
+  StrCpy $5 0
+  IfFileExists "$APPDATA\WELPlatform\tap-msi-2.5.10.ready" prepare_tap install_tap_driver
+
+prepare_tap:
   DetailPrint "正在准备 WEL 虚拟网卡..."
   IfFileExists "$APPDATA\WELPlatform\tap-create.txt" 0 check_named_tap
   nsExec::ExecToStack '"$SYSDIR\cmd.exe" /D /S /C ""$INSTDIR\resources\openvpn\bin\tapctl.exe" list | "$SYSDIR\findstr.exe" /I /L /G:"$APPDATA\WELPlatform\tap-create.txt""'
@@ -69,21 +75,30 @@ check_named_tap:
   Pop $2
   Pop $3
   StrCmp $2 "0" remember_created_tap
+  StrCmp $5 "1" retry_driver_tap
   Goto install_tap_driver
 
 install_tap_driver:
-  DetailPrint "正在安装官方 Win7 TAP-Windows 驱动..."
-  nsExec::ExecToLog '"$PLUGINSDIR\wel-tap-win7.exe" /S'
+  DetailPrint "正在安装官方 OpenVPN 2.5 TAP-Windows 驱动..."
+  nsExec::ExecToLog '"$SYSDIR\msiexec.exe" /i "$PLUGINSDIR\wel-tap.msi" /qn /norestart ADDLOCAL=Drivers,Drivers.TAPWindows6 /L*v "$TEMP\WEL-TAP-install.log"'
   Pop $2
   StrCmp $2 "0" tap_driver_installed
   StrCmp $2 "1641" tap_driver_installed
   StrCmp $2 "3010" tap_driver_installed
-  MessageBox MB_ICONSTOP|MB_OK "WEL 虚拟网卡驱动安装失败（错误代码：$2）。请确认 Windows 7 已安装 SP1 和 SHA-2 更新。"
+  MessageBox MB_ICONSTOP|MB_OK "WEL 虚拟网卡驱动安装失败（错误代码：$2）。请确认 Windows 7 已安装 SP1 和 SHA-2 更新。安装日志：$TEMP\WEL-TAP-install.log"
   Abort
 
 tap_driver_installed:
-  ; The TAP-only Win7 package can return before Plug and Play has published
-  ; the driver. Retry device creation instead of immediately requiring reboot.
+  CreateDirectory "$APPDATA\WELPlatform"
+  FileOpen $4 "$APPDATA\WELPlatform\tap-msi-2.5.10.ready" w
+  FileWrite $4 "OpenVPN-2.5.10-I601 TAPWindows6"
+  FileClose $4
+  StrCpy $5 1
+  Goto prepare_tap
+
+retry_driver_tap:
+  ; The Win7-compatible MSI can return before Plug and Play has published the
+  ; driver. Retry device creation instead of immediately requiring reboot.
   StrCpy $4 0
 
 create_driver_tap:
