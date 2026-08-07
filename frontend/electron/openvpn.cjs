@@ -152,7 +152,7 @@ async function prepare() {
     : null) || selectWelTapAdapter(adapters)
   if (adapter) {
     rememberTapAdapter(adapter)
-    return { ...current, adapterReady: true, tapName: adapter.name, tapNode: adapter.guid }
+    return { ...current, adapterReady: true, tapName: adapter.name, tapNode: adapter.name }
   }
 
   const createOutput = await runTapctl(tapctl, ['create', '--hwid', 'root\\tap0901', '--name', TAP_NAME], 20000)
@@ -163,7 +163,7 @@ async function prepare() {
       || selectWelTapAdapter(adapters)
     if (adapter) {
       rememberTapAdapter(adapter)
-      return { ...current, adapterReady: true, tapName: adapter.name, tapNode: adapter.guid }
+      return { ...current, adapterReady: true, tapName: adapter.name, tapNode: adapter.name }
     }
     await wait(500)
   }

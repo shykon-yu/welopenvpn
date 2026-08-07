@@ -7,6 +7,8 @@ const installer = fs.readFileSync(path.join(__dirname, '..', 'build', 'installer
 const cleanupOpenVpnGui = fs.readFileSync(path.join(__dirname, '..', 'build', 'cleanup-openvpn-gui.ps1'), 'utf8')
 const removeWelOpenVpnMsi = fs.readFileSync(path.join(__dirname, '..', 'build', 'remove-wel-openvpn-msi.ps1'), 'utf8')
 const rememberInstalledTap = fs.readFileSync(path.join(__dirname, '..', 'build', 'remember-installed-tap.ps1'), 'utf8')
+const hideTapWindows = fs.readFileSync(path.join(__dirname, '..', 'build', 'hide-tap-windows.ps1'), 'utf8')
+const removeWelTap = fs.readFileSync(path.join(__dirname, '..', 'build', 'remove-wel-tap.ps1'), 'utf8')
 const installMacro = installer.slice(0, installer.indexOf('!macro customUnInstall'))
 
 test('bundles the OpenVPN runtime and installs only the official Win7 TAP package', () => {
@@ -18,10 +20,22 @@ test('bundles the OpenVPN runtime and installs only the official Win7 TAP packag
   assert.match(installer, /resources\\openvpn\\bin\\openvpn\.exe/)
   assert.match(installer, /tapctl\.exe" list/)
   assert.match(installer, /remember-installed-tap\.ps1/)
+  assert.match(installer, /hide-tap-windows\.ps1/)
+  assert.match(installer, /remove-wel-tap\.ps1/)
   assert.match(installer, /\$PLUGINSDIR\\tap-before\.txt/)
   assert.match(installer, /\$APPDATA\\WELPlatform\\tap-create\.txt/)
   assert.match(installer, /findstr\.exe" \/I \/L \/G:"\$APPDATA\\WELPlatform\\tap-create\.txt"/)
-  assert.doesNotMatch(installer, /ensure-wel-tap\.ps1|remove-wel-tap\.ps1/)
+  assert.doesNotMatch(installMacro, /ensure-wel-tap\.ps1|remove-wel-tap\.ps1/)
+})
+
+test('hides the TAP package entry without hiding WEL itself', () => {
+  assert.match(hideTapWindows, /SystemComponent/)
+  assert.match(hideTapWindows, /TAP\[- \]Windows/)
+  assert.match(hideTapWindows, /tap-arp-state\.txt|StatePath/)
+  assert.match(hideTapWindows, /Restore/)
+  assert.match(removeWelTap, /WEL Virtual LAN|WEL TAP/)
+  assert.match(removeWelTap, /TapStatePath/)
+  assert.doesNotMatch(removeWelTap, /Get-NetAdapter|Win32_NetworkAdapter/)
 })
 
 test('does not create a second adapter after the standalone TAP installer runs', () => {
@@ -48,7 +62,7 @@ test('remembers only the adapter created by the standalone TAP installer', () =>
 test('reuses the dedicated adapter across upgrades without recreating it', () => {
   assert.match(installer, /tapctl\.exe" list .*findstr\.exe" \/L \/C:"WEL Virtual LAN" \/C:"WEL TAP"/)
   assert.doesNotMatch(installer, /wel-tapctl\.exe" delete|uninstall_wel_tap_loop/)
-  assert.match(installer, /Keep the dedicated adapter across upgrades and reinstalls/)
+  assert.match(installer, /WEL owns only the remembered adapter/)
   assert.doesNotMatch(installer, /Win32_NetworkAdapter|Get-NetAdapter/)
 })
 

@@ -3,6 +3,7 @@
   File /oname=cleanup-openvpn-gui.ps1 "${BUILD_RESOURCES_DIR}\cleanup-openvpn-gui.ps1"
   File /oname=remove-wel-openvpn-msi.ps1 "${BUILD_RESOURCES_DIR}\remove-wel-openvpn-msi.ps1"
   File /oname=remember-installed-tap.ps1 "${BUILD_RESOURCES_DIR}\remember-installed-tap.ps1"
+  File /oname=hide-tap-windows.ps1 "${BUILD_RESOURCES_DIR}\hide-tap-windows.ps1"
   File /oname=wel-tap-win7.exe "${BUILD_RESOURCES_DIR}\tap-windows-9.24.7-I601-Win7.exe"
 
   ; OpenVPN runs directly from the application resources directory. Only the
@@ -68,6 +69,9 @@ cleanup_gui_done:
   SetRegView lastused
   SetShellVarContext all
 
+  Call hide_tap_entry
+
+prepare_tap:
   DetailPrint "正在准备 WEL 虚拟网卡..."
   IfFileExists "$APPDATA\WELPlatform\tap-create.txt" 0 check_named_tap
   nsExec::ExecToStack '"$SYSDIR\cmd.exe" /D /S /C ""$INSTDIR\resources\openvpn\bin\tapctl.exe" list | "$SYSDIR\findstr.exe" /I /L /G:"$APPDATA\WELPlatform\tap-create.txt""'
@@ -106,8 +110,25 @@ install_tap_driver:
   Abort
 
 tap_driver_installed:
+  Call hide_tap_entry
   ; The standalone TAP package creates its own adapter. Remember that adapter
   ; instead of creating a second device with tapctl.
+  Goto remember_installed_tap
+
+hide_tap_entry:
+  ; The standalone package registers itself in Programs and Features. Hide
+  ; that entry so the only visible product remains WEL.
+  IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 hide_tap_system32
+  nsExec::ExecToLog '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\hide-tap-windows.ps1" -StatePath "$APPDATA\WELPlatform\tap-arp-state.txt"'
+  Pop $5
+  Goto hide_tap_return
+hide_tap_system32:
+  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\hide-tap-windows.ps1" -StatePath "$APPDATA\WELPlatform\tap-arp-state.txt"'
+  Pop $5
+hide_tap_return:
+  Return
+
+remember_installed_tap:
   IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 remember_tap_system32
   nsExec::ExecToLog '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\remember-installed-tap.ps1" -TapctlPath "$INSTDIR\resources\openvpn\bin\tapctl.exe" -BeforeListPath "$PLUGINSDIR\tap-before.txt"'
   Pop $2
@@ -147,7 +168,11 @@ firewall_ready:
 
 !macro customUnInstall
   SetOutPath "$PLUGINSDIR"
+  SetShellVarContext all
   File /oname=cleanup-openvpn-gui.ps1 "${BUILD_RESOURCES_DIR}\cleanup-openvpn-gui.ps1"
+  File /oname=remove-wel-tap.ps1 "${BUILD_RESOURCES_DIR}\remove-wel-tap.ps1"
+  File /oname=hide-tap-windows.ps1 "${BUILD_RESOURCES_DIR}\hide-tap-windows.ps1"
+  File /oname=wel-tapctl.exe "${BUILD_RESOURCES_DIR}\..\resources\openvpn\bin\tapctl.exe"
   nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /F /IM openvpn-gui.exe'
   Pop $2
   IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 uninstall_cleanup_gui_system32
@@ -158,8 +183,24 @@ uninstall_cleanup_gui_system32:
   nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\cleanup-openvpn-gui.ps1"'
   Pop $3
 uninstall_cleanup_gui_done:
-  ; Keep the dedicated adapter across upgrades and reinstalls. Recreating a
-  ; Windows network connection makes Windows append an ever-growing suffix.
+  IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 uninstall_remove_tap_system32
+  nsExec::ExecToLog '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\remove-wel-tap.ps1" -TapctlPath "$PLUGINSDIR\wel-tapctl.exe" -TapStatePath "$APPDATA\WELPlatform\tap-create.txt"'
+  Pop $4
+  Goto uninstall_remove_tap_done
+uninstall_remove_tap_system32:
+  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\remove-wel-tap.ps1" -TapctlPath "$PLUGINSDIR\wel-tapctl.exe" -TapStatePath "$APPDATA\WELPlatform\tap-create.txt"'
+  Pop $4
+uninstall_remove_tap_done:
+  IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 uninstall_restore_tap_system32
+  nsExec::ExecToLog '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\hide-tap-windows.ps1" -StatePath "$APPDATA\WELPlatform\tap-arp-state.txt" -Restore'
+  Pop $4
+  Goto uninstall_restore_tap_done
+uninstall_restore_tap_system32:
+  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\hide-tap-windows.ps1" -StatePath "$APPDATA\WELPlatform\tap-arp-state.txt" -Restore'
+  Pop $4
+uninstall_restore_tap_done:
+  ; WEL owns only the remembered adapter and adapters named WEL TAP/WEL
+  ; Virtual LAN. Other platforms' TAP adapters are never removed.
   nsExec::ExecToLog '"$SYSDIR\netsh.exe" advfirewall firewall delete rule name="WEL WE8 Game Broadcast Outbound"'
   Pop $0
   nsExec::ExecToLog '"$SYSDIR\netsh.exe" advfirewall firewall delete rule name="WEL WE8 Virtual LAN ICMPv4"'
