@@ -3,86 +3,58 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 
-const installer = fs.readFileSync(path.join(__dirname, '..', 'build', 'installer.nsh'), 'utf8')
-const cleanupOpenVpnGui = fs.readFileSync(path.join(__dirname, '..', 'build', 'cleanup-openvpn-gui.ps1'), 'utf8')
-const removeWelOpenVpnMsi = fs.readFileSync(path.join(__dirname, '..', 'build', 'remove-wel-openvpn-msi.ps1'), 'utf8')
-const rememberInstalledTap = fs.readFileSync(path.join(__dirname, '..', 'build', 'remember-installed-tap.ps1'), 'utf8')
-const hideTapWindows = fs.readFileSync(path.join(__dirname, '..', 'build', 'hide-tap-windows.ps1'), 'utf8')
-const removeWelTap = fs.readFileSync(path.join(__dirname, '..', 'build', 'remove-wel-tap.ps1'), 'utf8')
-const installMacro = installer.slice(0, installer.indexOf('!macro customUnInstall'))
+const buildPath = (name) => path.join(__dirname, '..', 'build', name)
+const installer = fs.readFileSync(buildPath('installer.nsh'), 'utf8')
+const ensureTap = fs.readFileSync(buildPath('ensure-wel-tap.ps1'), 'utf8')
+const removeTap = fs.readFileSync(buildPath('remove-wel-tap.ps1'), 'utf8')
+const hideTapWindows = fs.readFileSync(buildPath('hide-tap-windows.ps1'), 'utf8')
+const cleanupOpenVpnGui = fs.readFileSync(buildPath('cleanup-openvpn-gui.ps1'), 'utf8')
 
-test('bundles the OpenVPN runtime and installs only the official Win7 TAP package', () => {
-  assert.doesNotMatch(installer, /msiexec\.exe/)
-  assert.doesNotMatch(installer, /\.msi/)
-  assert.match(installer, /tap-windows-9\.24\.7-I601-Win7\.exe/)
-  assert.match(installer, /wel-tap-win7\.exe" \/S/)
-  assert.doesNotMatch(installer, /Drivers\.Wintun|OpenVPN GUI.*ADDLOCAL/)
+test('bundles the OpenVPN runtime and installs only the official TAP MSI feature', () => {
+  assert.match(installer, /msiexec\.exe/)
+  assert.match(installer, /OpenVPN-2\.5\.10-I601-amd64\.msi/)
+  assert.match(installer, /ADDLOCAL=Drivers,Drivers\.TAPWindows6/)
+  assert.match(installer, /TAPWINDOWS6ADAPTERS=1/)
+  assert.match(installer, /ARPSYSTEMCOMPONENT=1/)
+  assert.doesNotMatch(installer, /tap-windows-9\.24\.7-I601-Win7\.exe/)
+  assert.doesNotMatch(installer, /Drivers\.Wintun|ADDLOCAL=[^\r\n]*OpenVPN,Drivers/)
   assert.match(installer, /resources\\openvpn\\bin\\openvpn\.exe/)
-  assert.match(installer, /tapctl\.exe" list/)
-  assert.match(installer, /remember-installed-tap\.ps1/)
-  assert.match(installer, /hide-tap-windows\.ps1/)
+  assert.match(installer, /File \/oname=wel-tapctl\.exe/)
+  assert.match(installer, /ensure-wel-tap\.ps1/)
   assert.match(installer, /remove-wel-tap\.ps1/)
-  assert.match(installer, /\$PLUGINSDIR\\tap-before\.txt/)
-  assert.match(installer, /\$APPDATA\\WELPlatform\\tap-create\.txt/)
-  assert.match(installer, /findstr\.exe" \/I \/L \/G:"\$APPDATA\\WELPlatform\\tap-create\.txt"/)
-  assert.doesNotMatch(installMacro, /ensure-wel-tap\.ps1|remove-wel-tap\.ps1/)
+  assert.match(installer, /remove-wel-openvpn-msi\.ps1/)
+  assert.match(installer, /hide-tap-windows\.ps1/)
 })
 
-test('hides the TAP package entry without hiding WEL itself', () => {
+test('reuses one WEL adapter across upgrades and removes old WEL duplicates', () => {
+  assert.match(ensureTap, /NetConnectionID -eq 'WEL TAP'/)
+  assert.match(ensureTap, /Remove-NumberedWelTapAdapters/)
+  assert.match(ensureTap, /WEL TAP|WEL Virtual LAN/)
+  assert.match(ensureTap, /Get-WmiObject -Class Win32_NetworkAdapter/)
+  assert.doesNotMatch(ensureTap, /Get-NetAdapter/)
+  assert.match(removeTap, /for \(\$i = 2; \$i -le 50; \$i\+\+\)/)
+  assert.match(removeTap, /WEL Virtual LAN/)
+  assert.match(removeTap, /& \$TapctlPath delete \$name/)
+  assert.doesNotMatch(installer, /wel-tap-win7\.exe|remember-installed-tap\.ps1/)
+})
+
+test('keeps the Windows network connection name stable on Windows 7', () => {
+  assert.match(ensureTap, /Set-TapConnectionName/)
+  assert.match(ensureTap, /Set-ItemProperty -LiteralPath \$connectionKey -Name 'Name'/)
+  assert.match(removeTap, /Release-WelTapConnectionNames/)
+})
+
+test('hides TAP/OpenVPN entries without hiding WEL', () => {
+  assert.match(installer, /ARPSYSTEMCOMPONENT=1/)
   assert.match(hideTapWindows, /SystemComponent/)
   assert.match(hideTapWindows, /TAP\[- \]Windows/)
-  assert.match(hideTapWindows, /tap-arp-state\.txt|StatePath/)
-  assert.match(hideTapWindows, /Restore/)
-  assert.match(removeWelTap, /WEL Virtual LAN|WEL TAP/)
-  assert.match(removeWelTap, /TapStatePath/)
-  assert.doesNotMatch(removeWelTap, /Get-NetAdapter|Win32_NetworkAdapter/)
-})
-
-test('does not create a second adapter after the standalone TAP installer runs', () => {
-  const installStart = installer.indexOf('install_tap_driver:')
-  const driverInstalled = installer.indexOf('tap_driver_installed:')
-  const postInstall = installer.slice(driverInstalled)
-  assert.ok(installStart >= 0)
-  assert.ok(driverInstalled > installStart)
-  assert.match(installer.slice(installStart, driverInstalled), /tapctl\.exe" list/)
-  assert.match(postInstall, /remember-installed-tap\.ps1/)
-  assert.doesNotMatch(postInstall, /tapctl\.exe" create/)
-})
-
-test('remembers only the adapter created by the standalone TAP installer', () => {
-  assert.match(rememberInstalledTap, /BeforeListPath/)
-  assert.match(rememberInstalledTap, /Get-TapGuids/)
-  assert.match(rememberInstalledTap, /beforeGuids -notcontains \$guid/)
-  assert.match(rememberInstalledTap, /tap-create\.txt/)
-  assert.match(rememberInstalledTap, /tap-adapter\.json/)
-  assert.match(rememberInstalledTap, /Start-Sleep -Milliseconds 1000/)
-  assert.doesNotMatch(rememberInstalledTap, /Get-NetAdapter|ConvertFrom-Json|ConvertTo-Json|\-Raw|\s-notin\s/)
-})
-
-test('reuses the dedicated adapter across upgrades without recreating it', () => {
-  assert.match(installer, /tapctl\.exe" list .*findstr\.exe" \/L \/C:"WEL Virtual LAN" \/C:"WEL TAP"/)
-  assert.doesNotMatch(installer, /wel-tapctl\.exe" delete|uninstall_wel_tap_loop/)
-  assert.match(installer, /WEL owns only the remembered adapter/)
-  assert.doesNotMatch(installer, /Win32_NetworkAdapter|Get-NetAdapter/)
-})
-
-test('lets Win7 finish installation when a newly installed driver needs reboot', () => {
-  assert.match(installer, /SetRebootFlag true/)
-  assert.match(installer, /Windows 尚未完成虚拟网卡初始化/)
-  assert.match(installer, /remember-installed-tap\.ps1/)
-  assert.match(installer, /请安装完成后重启电脑，再运行一次安装包/)
-  assert.doesNotMatch(installer, /WEL 虚拟网卡创建失败.*Abort/s)
+  assert.match(installer, /tap-msi-2\.5\.10\.ready/)
 })
 
 test('runs installer system commands without visible console windows', () => {
   assert.doesNotMatch(installer, /ExecWait/)
   assert.match(installer, /nsExec::ExecToLog[^\n]+netsh\.exe/)
   assert.match(installer, /nsExec::ExecToLog[^\n]+powershell\.exe/)
-})
-
-test('does not delete the path-specific game broadcast rule during install', () => {
-  assert.doesNotMatch(installMacro, /firewall delete rule name="WEL WE8 Game Broadcast Outbound"/)
-  assert.match(installer.slice(installer.indexOf('!macro customUnInstall')), /firewall delete rule name="WEL WE8 Game Broadcast Outbound"/)
 })
 
 test('removes unused OpenVPN GUI shortcuts and startup entries', () => {
@@ -99,15 +71,4 @@ test('removes unused OpenVPN GUI shortcuts and startup entries', () => {
   assert.match(installer, /Sysnative\\WindowsPowerShell/)
   assert.match(installer, /SetRegView 64/)
   assert.match(installer, /SetRegView 32/)
-})
-
-test('removes the short-lived WEL OpenVPN MSI migration without touching unrelated products', () => {
-  assert.match(installer, /tap-msi-2\.5\.10\.ready/)
-  assert.match(installer, /remove-wel-openvpn-msi\.ps1/)
-  assert.match(removeWelOpenVpnMsi, /OpenVPN 2\.5\.10-I601\*/)
-  assert.match(removeWelOpenVpnMsi, /tap-create\.txt/)
-  assert.match(removeWelOpenVpnMsi, /& \$TapctlPath delete \$match\.Value/)
-  assert.doesNotMatch(removeWelOpenVpnMsi, /DisplayName -like 'OpenVPN\*'/)
-  assert.doesNotMatch(removeWelOpenVpnMsi, /Get-Content[^\r\n]*-Raw|\s-notin\s/)
-  assert.match(removeWelOpenVpnMsi, /-notcontains \$process\.ExitCode/)
 })

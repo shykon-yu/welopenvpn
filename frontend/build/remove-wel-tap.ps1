@@ -1,34 +1,35 @@
 param(
   [Parameter(Mandatory = $true)]
-  [string]$TapctlPath,
-  [Parameter(Mandatory = $true)]
-  [string]$TapStatePath
+  [string]$TapctlPath
 )
 
 $ErrorActionPreference = 'SilentlyContinue'
 
-if (-not (Test-Path -LiteralPath $TapctlPath)) { exit 0 }
+if (-not (Test-Path -LiteralPath $TapctlPath)) {
+  exit 0
+}
 
-$targets = @()
-if (Test-Path -LiteralPath $TapStatePath) {
-  Get-Content -LiteralPath $TapStatePath | ForEach-Object {
-    $guid = $_.Trim()
-    if ($guid -match '^\{[0-9A-Fa-f-]{36}\}$' -and $targets -notcontains $guid) {
-      $targets += $guid
+function Release-WelTapConnectionNames {
+  $classKey = 'HKLM:\SYSTEM\CurrentControlSet\Control\Network\{4d36e972-e325-11ce-bfc1-08002be10318}'
+  Get-ChildItem -LiteralPath $classKey -ErrorAction SilentlyContinue | ForEach-Object {
+    $connectionKey = Join-Path $_.PSPath 'Connection'
+    $connection = Get-ItemProperty -LiteralPath $connectionKey -ErrorAction SilentlyContinue
+    if ($connection.Name -match '^WEL TAP( \d+)?$') {
+      Set-ItemProperty -LiteralPath $connectionKey -Name 'Name' -Value ("WEL TAP removed " + $_.PSChildName) -ErrorAction SilentlyContinue
     }
   }
 }
 
-$list = (& $TapctlPath list 2>&1 | Out-String)
-foreach ($line in ($list -split "`r?`n")) {
-  if ($line -match '(\{[0-9A-Fa-f-]{36}\}).*?(WEL Virtual LAN(?: \d+)?|WEL TAP(?: \d+)?)\s*$') {
-    if ($targets -notcontains $matches[1]) { $targets += $matches[1] }
-  }
+$names = @('WEL TAP', 'WEL Virtual LAN')
+for ($i = 2; $i -le 50; $i++) {
+  $names += "WEL TAP $i"
 }
 
-foreach ($target in $targets) {
-  & $TapctlPath delete $target | Out-Null
+foreach ($name in $names) {
+  & $TapctlPath delete $name | Out-Null
 }
 
-Remove-Item -LiteralPath $TapStatePath -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 1
+Release-WelTapConnectionNames
+
 exit 0

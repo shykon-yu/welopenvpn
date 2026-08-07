@@ -1,10 +1,11 @@
 !macro customInstall
   SetOutPath "$PLUGINSDIR"
-  File /oname=cleanup-openvpn-gui.ps1 "${BUILD_RESOURCES_DIR}\cleanup-openvpn-gui.ps1"
+  File /oname=ensure-wel-tap.ps1 "${BUILD_RESOURCES_DIR}\ensure-wel-tap.ps1"
+  File /oname=remove-wel-tap.ps1 "${BUILD_RESOURCES_DIR}\remove-wel-tap.ps1"
   File /oname=remove-wel-openvpn-msi.ps1 "${BUILD_RESOURCES_DIR}\remove-wel-openvpn-msi.ps1"
-  File /oname=remember-installed-tap.ps1 "${BUILD_RESOURCES_DIR}\remember-installed-tap.ps1"
+  File /oname=cleanup-openvpn-gui.ps1 "${BUILD_RESOURCES_DIR}\cleanup-openvpn-gui.ps1"
   File /oname=hide-tap-windows.ps1 "${BUILD_RESOURCES_DIR}\hide-tap-windows.ps1"
-  File /oname=wel-tap-win7.exe "${BUILD_RESOURCES_DIR}\tap-windows-9.24.7-I601-Win7.exe"
+  File /oname=wel-tap.msi "${BUILD_RESOURCES_DIR}\OpenVPN-2.5.10-I601-amd64.msi"
 
   ; OpenVPN runs directly from the application resources directory. Only the
   ; signed TAP-Windows driver is installed into Windows.
@@ -16,24 +17,8 @@ runtime_missing:
   Abort
 
 runtime_ready:
-  ; 0.1.40 briefly used the full OpenVPN MSI for TAP registration. Remove only
-  ; installations marked by WEL before returning to the standalone TAP path.
-  SetShellVarContext all
-  IfFileExists "$APPDATA\WELPlatform\tap-msi-2.5.10.ready" 0 cleanup_msi_done
-  IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 cleanup_msi_system32
-  nsExec::ExecToLog '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\remove-wel-openvpn-msi.ps1" -TapctlPath "$INSTDIR\resources\openvpn\bin\tapctl.exe"'
-  Pop $4
-  Goto cleanup_msi_result
-cleanup_msi_system32:
-  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\remove-wel-openvpn-msi.ps1" -TapctlPath "$INSTDIR\resources\openvpn\bin\tapctl.exe"'
-  Pop $4
-cleanup_msi_result:
-  StrCmp $4 "0" cleanup_msi_done
-  MessageBox MB_ICONSTOP|MB_OK "旧版 OpenVPN 组件清理失败（错误代码：$4）。请在控制面板卸载 OpenVPN 2.5.10 后重新运行本安装包。"
-  Abort
-cleanup_msi_done:
   ; Clean startup entries left by older WEL releases that installed the full
-  ; OpenVPN feature set. The current helper installs TAP-Windows only.
+  ; OpenVPN feature set. The current MSI invocation installs TAP only.
   nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /F /IM openvpn-gui.exe'
   Pop $3
   IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 cleanup_gui_system32
@@ -69,93 +54,42 @@ cleanup_gui_done:
   SetRegView lastused
   SetShellVarContext all
 
-  IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 hide_existing_tap_system32
-  nsExec::ExecToLog '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\hide-tap-windows.ps1" -StatePath "$APPDATA\WELPlatform\tap-arp-state.txt"'
-  Pop $5
-  Goto hide_existing_tap_done
-hide_existing_tap_system32:
-  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\hide-tap-windows.ps1" -StatePath "$APPDATA\WELPlatform\tap-arp-state.txt"'
-  Pop $5
-hide_existing_tap_done:
-  Goto prepare_tap
-
-prepare_tap:
   DetailPrint "正在准备 WEL 虚拟网卡..."
-  IfFileExists "$APPDATA\WELPlatform\tap-create.txt" 0 check_named_tap
-  nsExec::ExecToStack '"$SYSDIR\cmd.exe" /D /S /C ""$INSTDIR\resources\openvpn\bin\tapctl.exe" list | "$SYSDIR\findstr.exe" /I /L /G:"$APPDATA\WELPlatform\tap-create.txt""'
+  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\ensure-wel-tap.ps1" -TapctlPath "$INSTDIR\resources\openvpn\bin\tapctl.exe"'
   Pop $2
-  Pop $3
   StrCmp $2 "0" tap_ready
 
-check_named_tap:
-  nsExec::ExecToStack '"$SYSDIR\cmd.exe" /D /S /C ""$INSTDIR\resources\openvpn\bin\tapctl.exe" list | "$SYSDIR\findstr.exe" /L /C:"WEL Virtual LAN" /C:"WEL TAP""'
-  Pop $2
-  Pop $3
-  StrCmp $2 "0" tap_ready
-
-  ; Reuse an existing tap0901 driver when possible. This avoids replacing a
-  ; working driver owned by another platform and prevents needless prompts.
-  nsExec::ExecToStack '"$INSTDIR\resources\openvpn\bin\tapctl.exe" create --hwid "root\tap0901" --name "WEL TAP"'
-  Pop $2
-  Pop $3
-  StrCmp $2 "0" remember_created_tap
-  Goto install_tap_driver
-
-install_tap_driver:
-  nsExec::ExecToStack '"$INSTDIR\resources\openvpn\bin\tapctl.exe" list'
-  Pop $6
-  Pop $7
-  FileOpen $4 "$PLUGINSDIR\tap-before.txt" w
-  FileWrite $4 "$7"
-  FileClose $4
-  DetailPrint "正在安装官方 Win7 TAP-Windows 驱动..."
-  nsExec::ExecToLog '"$PLUGINSDIR\wel-tap-win7.exe" /S'
+  DetailPrint "正在安装官方 TAP-Windows 驱动..."
+  nsExec::ExecToLog '"$SYSDIR\msiexec.exe" /i "$PLUGINSDIR\wel-tap.msi" /qn /norestart ADDLOCAL=Drivers,Drivers.TAPWindows6 TAPWINDOWS6ADAPTERS=1 ARPSYSTEMCOMPONENT=1 /L*v "$TEMP\WEL-TAP-install.log"'
   Pop $2
   StrCmp $2 "0" tap_driver_installed
   StrCmp $2 "1641" tap_driver_installed
   StrCmp $2 "3010" tap_driver_installed
-  MessageBox MB_ICONSTOP|MB_OK "WEL 虚拟网卡驱动安装失败（错误代码：$2）。请确认 Windows 7 已安装 SP1 和 SHA-2 更新。"
+  MessageBox MB_ICONSTOP|MB_OK "WEL 虚拟网卡驱动安装失败（错误代码：$2）。请确认 Windows 7 已安装 SP1 和 SHA-2 更新。安装日志：$TEMP\WEL-TAP-install.log"
   Abort
 
 tap_driver_installed:
-  IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 hide_new_tap_system32
-  nsExec::ExecToLog '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\hide-tap-windows.ps1" -StatePath "$APPDATA\WELPlatform\tap-arp-state.txt"'
-  Pop $5
-  Goto hide_new_tap_done
-hide_new_tap_system32:
-  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\hide-tap-windows.ps1" -StatePath "$APPDATA\WELPlatform\tap-arp-state.txt"'
-  Pop $5
-hide_new_tap_done:
-  ; The standalone TAP package creates its own adapter. Remember that adapter
-  ; instead of creating a second device with tapctl.
-  Goto remember_installed_tap
-
-remember_installed_tap:
-  IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 remember_tap_system32
-  nsExec::ExecToLog '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\remember-installed-tap.ps1" -TapctlPath "$INSTDIR\resources\openvpn\bin\tapctl.exe" -BeforeListPath "$PLUGINSDIR\tap-before.txt"'
+  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\ensure-wel-tap.ps1" -TapctlPath "$INSTDIR\resources\openvpn\bin\tapctl.exe"'
   Pop $2
-  Goto remember_tap_result
-remember_tap_system32:
-  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\remember-installed-tap.ps1" -TapctlPath "$INSTDIR\resources\openvpn\bin\tapctl.exe" -BeforeListPath "$PLUGINSDIR\tap-before.txt"'
-  Pop $2
-remember_tap_result:
   StrCmp $2 "0" tap_ready
-  Goto tap_requires_reboot
-
-remember_created_tap:
-  ; OpenVPN 2.5 accepts the adapter GUID directly. Remember it so localized
-  ; Windows names such as "本地连接 8" never need to be placed in the config.
-  CreateDirectory "$APPDATA\WELPlatform"
-  FileOpen $4 "$APPDATA\WELPlatform\tap-create.txt" w
-  FileWrite $4 "$3"
-  FileClose $4
-  Goto tap_ready
-
-tap_requires_reboot:
-  SetRebootFlag true
-  MessageBox MB_ICONEXCLAMATION|MB_OK "TAP-Windows 驱动已安装，但 Windows 尚未完成虚拟网卡初始化。请安装完成后重启电脑，再运行一次安装包。"
+  MessageBox MB_ICONSTOP|MB_OK "TAP-Windows 驱动已安装，但 WEL 虚拟网卡创建失败（错误代码：$2）。请重启电脑后重新运行安装包。安装日志：$TEMP\WEL-TAP-install.log"
+  Abort
 
 tap_ready:
+  ; Hide the MSI entry as a second layer for Windows versions that ignore
+  ; ARPSYSTEMCOMPONENT when the property is supplied on the command line.
+  IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 hide_tap_system32
+  nsExec::ExecToLog '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\hide-tap-windows.ps1" -StatePath "$APPDATA\WELPlatform\tap-arp-state.txt"'
+  Pop $5
+  Goto hide_tap_done
+hide_tap_system32:
+  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\hide-tap-windows.ps1" -StatePath "$APPDATA\WELPlatform\tap-arp-state.txt"'
+  Pop $5
+hide_tap_done:
+  CreateDirectory "$COMMONAPPDATA\WELPlatform"
+  FileOpen $6 "$COMMONAPPDATA\WELPlatform\tap-msi-2.5.10.ready" w
+  FileWrite $6 "WEL TAP MSI\r\n"
+  FileClose $6
   DetailPrint "正在配置 WEL 联机防火墙规则..."
   nsExec::ExecToLog '"$SYSDIR\netsh.exe" advfirewall firewall delete rule name="WEL WE8 Virtual LAN ICMPv4"'
   Pop $0
@@ -170,10 +104,9 @@ firewall_ready:
 
 !macro customUnInstall
   SetOutPath "$PLUGINSDIR"
-  SetShellVarContext all
-  File /oname=cleanup-openvpn-gui.ps1 "${BUILD_RESOURCES_DIR}\cleanup-openvpn-gui.ps1"
   File /oname=remove-wel-tap.ps1 "${BUILD_RESOURCES_DIR}\remove-wel-tap.ps1"
-  File /oname=hide-tap-windows.ps1 "${BUILD_RESOURCES_DIR}\hide-tap-windows.ps1"
+  File /oname=remove-wel-openvpn-msi.ps1 "${BUILD_RESOURCES_DIR}\remove-wel-openvpn-msi.ps1"
+  File /oname=cleanup-openvpn-gui.ps1 "${BUILD_RESOURCES_DIR}\cleanup-openvpn-gui.ps1"
   File /oname=wel-tapctl.exe "${BUILD_RESOURCES_DIR}\..\resources\openvpn\bin\tapctl.exe"
   nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /F /IM openvpn-gui.exe'
   Pop $2
@@ -185,26 +118,10 @@ uninstall_cleanup_gui_system32:
   nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\cleanup-openvpn-gui.ps1"'
   Pop $3
 uninstall_cleanup_gui_done:
-  IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 uninstall_remove_tap_system32
-  nsExec::ExecToLog '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\remove-wel-tap.ps1" -TapctlPath "$PLUGINSDIR\wel-tapctl.exe" -TapStatePath "$APPDATA\WELPlatform\tap-create.txt"'
+  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\remove-wel-tap.ps1" -TapctlPath "$PLUGINSDIR\wel-tapctl.exe"'
+  Pop $1
+  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\remove-wel-openvpn-msi.ps1" -TapctlPath "$PLUGINSDIR\wel-tapctl.exe"'
   Pop $4
-  Goto uninstall_remove_tap_done
-uninstall_remove_tap_system32:
-  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\remove-wel-tap.ps1" -TapctlPath "$PLUGINSDIR\wel-tapctl.exe" -TapStatePath "$APPDATA\WELPlatform\tap-create.txt"'
-  Pop $4
-uninstall_remove_tap_done:
-  IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 uninstall_restore_tap_system32
-  nsExec::ExecToLog '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\hide-tap-windows.ps1" -StatePath "$APPDATA\WELPlatform\tap-arp-state.txt" -Restore'
-  Pop $4
-  Goto uninstall_restore_tap_done
-uninstall_restore_tap_system32:
-  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\hide-tap-windows.ps1" -StatePath "$APPDATA\WELPlatform\tap-arp-state.txt" -Restore'
-  Pop $4
-uninstall_restore_tap_done:
-  ; WEL owns only the remembered adapter and adapters named WEL TAP/WEL
-  ; Virtual LAN. Other platforms' TAP adapters are never removed.
-  nsExec::ExecToLog '"$SYSDIR\netsh.exe" advfirewall firewall delete rule name="WEL WE8 Game Broadcast Outbound"'
-  Pop $0
   nsExec::ExecToLog '"$SYSDIR\netsh.exe" advfirewall firewall delete rule name="WEL WE8 Virtual LAN ICMPv4"'
   Pop $0
   SetShellVarContext all
