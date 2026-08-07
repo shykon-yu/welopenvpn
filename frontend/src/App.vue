@@ -354,9 +354,26 @@ function vpnPriorityPrompt(status: DesktopLeaseStatus) {
   ].filter(Boolean).join('\n\n')
 }
 
+function shouldContinueWithConflictingAdapters(status: DesktopLeaseStatus) {
+  if (!status.conflictingAdapters.length) return true
+  return window.confirm([
+    '检测到可能影响 WE8 搜房间的冲突虚拟网卡：',
+    status.conflictingAdapters.join('、'),
+    '',
+    '建议先取消启动，到 Windows 网络适配器里禁用这些网卡，然后重启电脑后再进入平台。',
+    '如果不处理，可能出现双方能 Ping 通，但游戏互相搜不到、同意后连不上的情况。',
+    '',
+    '仍然继续启动 WE8 吗？',
+  ].join('\n'))
+}
+
 async function inspectAndMaybePrioritizeVpn(lease: Lease) {
   const inspected = await desktop()!.inspectVpn({ username: lease.username, subnetCidr: lease.subnet_cidr })
   if (!inspected.connected) throw new Error('尚未获取房间虚拟 IP，请退出房间后重新进入')
+  if (!shouldContinueWithConflictingAdapters(inspected)) {
+    notice.value = '已取消启动；请禁用冲突虚拟网卡并重启电脑后再试'
+    return null
+  }
   if (!needsVpnPriorityAdjustment(inspected)) return inspected
   if (!window.confirm(vpnPriorityPrompt(inspected))) {
     notice.value = '已跳过网卡优化；如果搜不到主机或连不上，请重新启动游戏并同意管理员授权'
@@ -372,6 +389,7 @@ async function launchGame() {
   if (!desktop()) { notice.value = '浏览器预览不会启动本机程序，请在 Windows 客户端测试'; return }
   try {
     networkStatus.value = await inspectAndMaybePrioritizeVpn(activeLease.value)
+    if (!networkStatus.value) return
     if (!(await ensureGameFirewall(gamePath.value))) return
     await desktop()!.launchGame(gamePath.value)
   } catch (error) { errorMessage.value = messageOf(error) }
