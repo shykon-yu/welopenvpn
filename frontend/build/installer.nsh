@@ -86,8 +86,9 @@ hide_tap_system32:
   nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\hide-tap-windows.ps1" -StatePath "$APPDATA\WELPlatform\tap-arp-state.txt"'
   Pop $5
 hide_tap_done:
-  CreateDirectory "$COMMONAPPDATA\WELPlatform"
-  FileOpen $6 "$COMMONAPPDATA\WELPlatform\tap-msi-2.5.10.ready" w
+  ; SetShellVarContext all above makes APPDATA the machine-wide data folder.
+  CreateDirectory "$APPDATA\WELPlatform"
+  FileOpen $6 "$APPDATA\WELPlatform\tap-msi-2.5.10.ready" w
   FileWrite $6 "WEL TAP MSI\r\n"
   FileClose $6
   DetailPrint "正在配置 WEL 联机防火墙规则..."

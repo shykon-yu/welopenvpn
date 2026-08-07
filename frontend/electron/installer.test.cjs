@@ -49,6 +49,7 @@ test('hides TAP/OpenVPN entries without hiding WEL', () => {
   assert.match(hideTapWindows, /SystemComponent/)
   assert.match(hideTapWindows, /TAP\[- \]Windows/)
   assert.match(installer, /tap-msi-2\.5\.10\.ready/)
+  assert.doesNotMatch(installer, /\$COMMONAPPDATA/)
 })
 
 test('runs installer system commands without visible console windows', () => {
