@@ -18,13 +18,24 @@ install_openvpn:
   Abort
 
 openvpn_ready:
-  ; The bundled OpenVPN GUI is not used by WEL. Keep only the WEL shortcuts.
+  ; The bundled OpenVPN GUI is not used by WEL. Keep only the WEL shortcuts
+  ; and prevent its empty-config warning from appearing after reboot.
+  nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /F /IM openvpn-gui.exe'
+  Pop $3
   SetShellVarContext all
   Delete "$DESKTOP\OpenVPN GUI.lnk"
   Delete "$SMPROGRAMS\OpenVPN\OpenVPN GUI.lnk"
+  Delete "$SMSTARTUP\OpenVPN GUI.lnk"
   SetShellVarContext current
   Delete "$DESKTOP\OpenVPN GUI.lnk"
   Delete "$SMPROGRAMS\OpenVPN\OpenVPN GUI.lnk"
+  Delete "$SMSTARTUP\OpenVPN GUI.lnk"
+  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "OpenVPN GUI"
+  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "OpenVPN-GUI"
+  DeleteRegValue HKLM "Software\Microsoft\Windows\CurrentVersion\Run" "OpenVPN GUI"
+  DeleteRegValue HKLM "Software\Microsoft\Windows\CurrentVersion\Run" "OpenVPN-GUI"
+  DeleteRegValue HKLM "Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run" "OpenVPN GUI"
+  DeleteRegValue HKLM "Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run" "OpenVPN-GUI"
   SetShellVarContext all
 
   IfFileExists "$PROGRAMFILES64\OpenVPN\bin\tapctl.exe" 0 tapctl_missing
@@ -55,8 +66,24 @@ firewall_ready:
 !macro customUnInstall
   SetOutPath "$PLUGINSDIR"
   File /oname=remove-wel-tap.ps1 "${BUILD_RESOURCES_DIR}\remove-wel-tap.ps1"
+  nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /F /IM openvpn-gui.exe'
+  Pop $2
   nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\remove-wel-tap.ps1" -TapctlPath "$PROGRAMFILES64\OpenVPN\bin\tapctl.exe"'
   Pop $1
   nsExec::ExecToLog '"$SYSDIR\netsh.exe" advfirewall firewall delete rule name="WEL WE8 Virtual LAN ICMPv4"'
   Pop $0
+  SetShellVarContext all
+  Delete "$DESKTOP\OpenVPN GUI.lnk"
+  Delete "$SMPROGRAMS\OpenVPN\OpenVPN GUI.lnk"
+  Delete "$SMSTARTUP\OpenVPN GUI.lnk"
+  SetShellVarContext current
+  Delete "$DESKTOP\OpenVPN GUI.lnk"
+  Delete "$SMPROGRAMS\OpenVPN\OpenVPN GUI.lnk"
+  Delete "$SMSTARTUP\OpenVPN GUI.lnk"
+  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "OpenVPN GUI"
+  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "OpenVPN-GUI"
+  DeleteRegValue HKLM "Software\Microsoft\Windows\CurrentVersion\Run" "OpenVPN GUI"
+  DeleteRegValue HKLM "Software\Microsoft\Windows\CurrentVersion\Run" "OpenVPN-GUI"
+  DeleteRegValue HKLM "Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run" "OpenVPN GUI"
+  DeleteRegValue HKLM "Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run" "OpenVPN-GUI"
 !macroend
