@@ -79,15 +79,13 @@ function parseTapGuid(output) {
 
 function readRememberedTapGuid() {
   try {
-    const state = JSON.parse(fs.readFileSync(TAP_STATE_PATH, 'utf8'))
-    const guid = parseTapGuid(state.guid)
-    if (guid) return guid
+    const installerGuid = parseTapGuid(fs.readFileSync(INSTALLER_TAP_STATE_PATH, 'utf8'))
+    if (installerGuid) return installerGuid
   } catch {}
   try {
-    return parseTapGuid(fs.readFileSync(INSTALLER_TAP_STATE_PATH, 'utf8'))
-  } catch {
-    return null
-  }
+    const state = JSON.parse(fs.readFileSync(TAP_STATE_PATH, 'utf8'))
+    return parseTapGuid(state.guid)
+  } catch { return null }
 }
 
 function rememberTapAdapter(adapter) {
@@ -346,16 +344,22 @@ function wait(ms) {
 }
 
 function isRetryableConnectError(error) {
-  return /连接超时：未收到 OpenVPN 初始化完成信号/.test(String(error?.message || error || ''))
+  return /连接超时：未收到 OpenVPN 初始化完成信号|CreateFile failed on tap-windows6 device|Failed to open tap-windows6 adapter/i.test(String(error?.message || error || ''))
 }
 
 async function stopStaleWelOpenVpnProcesses() {
   if (process.platform !== 'win32') return
   try {
     await runPowerShell(`
-Get-WmiObject Win32_Process -Filter "Name = 'openvpn.exe'" |
-  Where-Object { $_.CommandLine -like '*WELPlatform*' } |
-  ForEach-Object { try { $_.Terminate() | Out-Null } catch {} }
+$deadline = [DateTime]::UtcNow.AddSeconds(5)
+do {
+  $processes = @(Get-WmiObject Win32_Process -Filter "Name = 'openvpn.exe'" |
+    Where-Object { $_.CommandLine -like '*WELPlatform*' })
+  foreach ($process in $processes) { try { $process.Terminate() | Out-Null } catch {} }
+  if ($processes.Count -eq 0) { exit 0 }
+  Start-Sleep -Milliseconds 250
+} while ([DateTime]::UtcNow -lt $deadline)
+exit 2
 `, 5000)
   } catch {
     // Best effort only. A normal connection attempt can still proceed.
@@ -422,9 +426,10 @@ async function connect({ host, port, roomID, username, token, subnetCidr }) {
   if (!executable) throw new Error('未检测到 OpenVPN 运行组件，请重新运行完整安装包')
   if (!token || !username || !roomID || !subnetCidr) throw new Error('OpenVPN 房间凭据不完整')
 
-  const prepared = await prepare()
   await stopConnection()
   await stopStaleWelOpenVpnProcesses()
+  await wait(500)
+  const prepared = await prepare()
 
   let lastError = null
   for (let attempt = 1; attempt <= CONNECT_MAX_ATTEMPTS; attempt += 1) {

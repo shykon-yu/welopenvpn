@@ -2,6 +2,7 @@
   SetOutPath "$PLUGINSDIR"
   File /oname=cleanup-openvpn-gui.ps1 "${BUILD_RESOURCES_DIR}\cleanup-openvpn-gui.ps1"
   File /oname=remove-wel-openvpn-msi.ps1 "${BUILD_RESOURCES_DIR}\remove-wel-openvpn-msi.ps1"
+  File /oname=remember-installed-tap.ps1 "${BUILD_RESOURCES_DIR}\remember-installed-tap.ps1"
   File /oname=wel-tap-win7.exe "${BUILD_RESOURCES_DIR}\tap-windows-9.24.7-I601-Win7.exe"
 
   ; OpenVPN runs directly from the application resources directory. Only the
@@ -89,6 +90,12 @@ check_named_tap:
   Goto install_tap_driver
 
 install_tap_driver:
+  nsExec::ExecToStack '"$INSTDIR\resources\openvpn\bin\tapctl.exe" list'
+  Pop $6
+  Pop $7
+  FileOpen $4 "$PLUGINSDIR\tap-before.txt" w
+  FileWrite $4 "$7"
+  FileClose $4
   DetailPrint "正在安装官方 Win7 TAP-Windows 驱动..."
   nsExec::ExecToLog '"$PLUGINSDIR\wel-tap-win7.exe" /S'
   Pop $2
@@ -99,18 +106,18 @@ install_tap_driver:
   Abort
 
 tap_driver_installed:
-  ; The TAP-only Win7 package can return before Plug and Play has published
-  ; the driver. Retry device creation instead of immediately requiring reboot.
-  StrCpy $4 0
-
-create_driver_tap:
-  Sleep 1000
-  nsExec::ExecToStack '"$INSTDIR\resources\openvpn\bin\tapctl.exe" create --hwid "root\tap0901" --name "WEL Virtual LAN"'
+  ; The standalone TAP package creates its own adapter. Remember that adapter
+  ; instead of creating a second device with tapctl.
+  IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 remember_tap_system32
+  nsExec::ExecToLog '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\remember-installed-tap.ps1" -TapctlPath "$INSTDIR\resources\openvpn\bin\tapctl.exe" -BeforeListPath "$PLUGINSDIR\tap-before.txt"'
   Pop $2
-  Pop $3
-  StrCmp $2 "0" remember_created_tap
-  IntOp $4 $4 + 1
-  IntCmp $4 20 tap_requires_reboot create_driver_tap tap_requires_reboot
+  Goto remember_tap_result
+remember_tap_system32:
+  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\remember-installed-tap.ps1" -TapctlPath "$INSTDIR\resources\openvpn\bin\tapctl.exe" -BeforeListPath "$PLUGINSDIR\tap-before.txt"'
+  Pop $2
+remember_tap_result:
+  StrCmp $2 "0" tap_ready
+  Goto tap_requires_reboot
 
 remember_created_tap:
   ; OpenVPN 2.5 accepts the adapter GUID directly. Remember it so localized
@@ -122,10 +129,8 @@ remember_created_tap:
   Goto tap_ready
 
 tap_requires_reboot:
-  ; Win7 can delay publishing a newly installed network driver until reboot.
-  ; Finish installation and let the elevated app retry tapctl on first launch.
   SetRebootFlag true
-  MessageBox MB_ICONEXCLAMATION|MB_OK "TAP-Windows 驱动已安装。Windows 尚未完成虚拟网卡初始化，请安装完成后重启电脑，再启动平台。"
+  MessageBox MB_ICONEXCLAMATION|MB_OK "TAP-Windows 驱动已安装，但 Windows 尚未完成虚拟网卡初始化。请安装完成后重启电脑，再运行一次安装包。"
 
 tap_ready:
   DetailPrint "正在配置 WEL 联机防火墙规则..."

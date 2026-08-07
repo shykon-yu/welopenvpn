@@ -6,6 +6,7 @@ const path = require('node:path')
 const installer = fs.readFileSync(path.join(__dirname, '..', 'build', 'installer.nsh'), 'utf8')
 const cleanupOpenVpnGui = fs.readFileSync(path.join(__dirname, '..', 'build', 'cleanup-openvpn-gui.ps1'), 'utf8')
 const removeWelOpenVpnMsi = fs.readFileSync(path.join(__dirname, '..', 'build', 'remove-wel-openvpn-msi.ps1'), 'utf8')
+const rememberInstalledTap = fs.readFileSync(path.join(__dirname, '..', 'build', 'remember-installed-tap.ps1'), 'utf8')
 const installMacro = installer.slice(0, installer.indexOf('!macro customUnInstall'))
 
 test('bundles the OpenVPN runtime and installs only the official Win7 TAP package', () => {
@@ -15,11 +16,33 @@ test('bundles the OpenVPN runtime and installs only the official Win7 TAP packag
   assert.match(installer, /wel-tap-win7\.exe" \/S/)
   assert.doesNotMatch(installer, /Drivers\.Wintun|OpenVPN GUI.*ADDLOCAL/)
   assert.match(installer, /resources\\openvpn\\bin\\openvpn\.exe/)
-  assert.match(installer, /tapctl\.exe" create --hwid "root\\tap0901" --name "WEL Virtual LAN"/)
+  assert.match(installer, /tapctl\.exe" list/)
+  assert.match(installer, /remember-installed-tap\.ps1/)
+  assert.match(installer, /\$PLUGINSDIR\\tap-before\.txt/)
   assert.match(installer, /\$APPDATA\\WELPlatform\\tap-create\.txt/)
-  assert.match(installer, /FileWrite \$4 "\$3"/)
   assert.match(installer, /findstr\.exe" \/I \/L \/G:"\$APPDATA\\WELPlatform\\tap-create\.txt"/)
   assert.doesNotMatch(installer, /ensure-wel-tap\.ps1|remove-wel-tap\.ps1/)
+})
+
+test('does not create a second adapter after the standalone TAP installer runs', () => {
+  const installStart = installer.indexOf('install_tap_driver:')
+  const driverInstalled = installer.indexOf('tap_driver_installed:')
+  const postInstall = installer.slice(driverInstalled)
+  assert.ok(installStart >= 0)
+  assert.ok(driverInstalled > installStart)
+  assert.match(installer.slice(installStart, driverInstalled), /tapctl\.exe" list/)
+  assert.match(postInstall, /remember-installed-tap\.ps1/)
+  assert.doesNotMatch(postInstall, /tapctl\.exe" create/)
+})
+
+test('remembers only the adapter created by the standalone TAP installer', () => {
+  assert.match(rememberInstalledTap, /BeforeListPath/)
+  assert.match(rememberInstalledTap, /Get-TapGuids/)
+  assert.match(rememberInstalledTap, /beforeGuids -notcontains \$guid/)
+  assert.match(rememberInstalledTap, /tap-create\.txt/)
+  assert.match(rememberInstalledTap, /tap-adapter\.json/)
+  assert.match(rememberInstalledTap, /Start-Sleep -Milliseconds 1000/)
+  assert.doesNotMatch(rememberInstalledTap, /Get-NetAdapter|ConvertFrom-Json|ConvertTo-Json|\-Raw|\s-notin\s/)
 })
 
 test('reuses the dedicated adapter across upgrades without recreating it', () => {
@@ -32,7 +55,8 @@ test('reuses the dedicated adapter across upgrades without recreating it', () =>
 test('lets Win7 finish installation when a newly installed driver needs reboot', () => {
   assert.match(installer, /SetRebootFlag true/)
   assert.match(installer, /Windows 尚未完成虚拟网卡初始化/)
-  assert.match(installer, /IntCmp \$4 20 tap_requires_reboot create_driver_tap tap_requires_reboot/)
+  assert.match(installer, /remember-installed-tap\.ps1/)
+  assert.match(installer, /请安装完成后重启电脑，再运行一次安装包/)
   assert.doesNotMatch(installer, /WEL 虚拟网卡创建失败.*Abort/s)
 })
 

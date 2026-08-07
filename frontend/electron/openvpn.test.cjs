@@ -51,10 +51,12 @@ test('detects OpenVPN network configuration progress before final ready line', (
   assert.doesNotMatch('UDPv4 link remote: [AF_INET]8.133.189.9:12001', OPENVPN_PROGRESS)
 })
 
-test('retries transient OpenVPN handshake timeouts only', () => {
+test('retries transient OpenVPN and TAP startup failures only', () => {
   assert.equal(CONNECT_TIMEOUT_MS, 45000)
   assert.equal(CONNECT_MAX_ATTEMPTS, 4)
   assert.equal(isRetryableConnectError(new Error('OpenVPN 连接失败：连接超时：未收到 OpenVPN 初始化完成信号')), true)
+  assert.equal(isRetryableConnectError(new Error('CreateFile failed on tap-windows6 device')), true)
+  assert.equal(isRetryableConnectError(new Error('Failed to open tap-windows6 adapter')), true)
   assert.equal(isRetryableConnectError(new Error('OpenVPN 进程提前退出（代码 1）')), false)
 })
 
@@ -87,6 +89,9 @@ test('keeps and dynamically selects the actual adapter name before connecting', 
   assert.match(client, /`dev-node "\$\{tapNode\}"`/)
   assert.match(client, /tapNode: adapter\.guid/)
   assert.match(client, /readRememberedTapGuid\(\)/)
+  assert.match(client, /INSTALLER_TAP_STATE_PATH/)
+  assert.match(client, /stopStaleWelOpenVpnProcesses/)
+  assert.match(client, /await wait\(500\)/)
   assert.doesNotMatch(client, /newname=/)
   assert.match(client, /await prepare\(\)/)
 })

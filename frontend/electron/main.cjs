@@ -18,6 +18,7 @@ const LOG_FILE = path.join(LOG_DIRECTORY, 'main.log')
 
 let mainWindow = null
 let isQuitting = false
+let vpnShutdownComplete = false
 
 function writeLog(message, error) {
   try {
@@ -189,8 +190,13 @@ app.whenReady()
     showFatalError(error)
     app.quit()
   })
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
   isQuitting = true
-  openvpn.stopConnection()
+  if (vpnShutdownComplete) return
+  event.preventDefault()
+  openvpn.stopConnection().finally(() => {
+    vpnShutdownComplete = true
+    app.quit()
+  })
 })
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
