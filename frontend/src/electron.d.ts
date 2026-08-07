@@ -45,6 +45,7 @@ declare global {
       inspectVpn: (lease: Pick<DesktopLease, 'username' | 'subnetCidr'>) => Promise<DesktopLeaseStatus>
       prioritizeVpn: (lease: Pick<DesktopLease, 'username' | 'subnetCidr'>) => Promise<DesktopLeaseStatus>
       copyVpnDiagnostics: (lease: Pick<DesktopLease, 'username' | 'subnetCidr'>) => Promise<DesktopLeaseStatus>
+      checkGameFirewall: (gamePath: string) => Promise<boolean>
       configureGameFirewall: (gamePath: string) => Promise<void>
       desktopStatus: () => Promise<DesktopStatus>
       prepareDesktop: () => Promise<DesktopStatus>
