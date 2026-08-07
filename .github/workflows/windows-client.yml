@@ -50,10 +50,7 @@ jobs:
             'resources/openvpn/bin/vcruntime140.dll',
             'resources/openvpn/bin/tapctl.exe',
             'resources/openvpn/ca.crt',
-            'build/tap-windows-9.24.6/x64/OemVista.inf',
-            'build/tap-windows-9.24.6/x64/tap0901.cat',
-            'build/tap-windows-9.24.6/x64/tap0901.sys',
-            'build/tap-windows-9.24.6/x64/tapinstall.exe'
+            'build/OpenVPN-2.5.10-I601-amd64.msi'
           )
           $missing = @($required | Where-Object { -not (Test-Path $_) })
           if ($missing.Count -gt 0) {

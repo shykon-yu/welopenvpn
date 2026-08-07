@@ -1,17 +1,11 @@
 param(
   [Parameter(Mandatory = $true)]
-  [string]$TapctlPath,
-  [Parameter(Mandatory = $true)]
-  [string]$TapInstallPath,
-  [Parameter(Mandatory = $true)]
-  [string]$DriverInfPath
+  [string]$TapctlPath
 )
 
 $ErrorActionPreference = 'SilentlyContinue'
 
-if (-not (Test-Path -LiteralPath $TapctlPath) -or
-    -not (Test-Path -LiteralPath $TapInstallPath) -or
-    -not (Test-Path -LiteralPath $DriverInfPath)) {
+if (-not (Test-Path -LiteralPath $TapctlPath)) {
   exit 2
 }
 
@@ -95,38 +89,6 @@ if ($createExitCode -eq 0) {
   }
 }
 
-# No compatible driver is installed. Install the proven TAP-Windows
-# 9.24.6.601 package directly, matching the mature Win7 client approach.
-$existingGuids = @($tapAdapters |
-  Where-Object { -not [string]::IsNullOrEmpty($_.GUID) } |
-  ForEach-Object { $_.GUID })
-
-& $TapInstallPath install $DriverInfPath 'tap0901' | Out-Null
-$driverExitCode = $LASTEXITCODE
-if ($driverExitCode -ne 0 -and $driverExitCode -ne 1) {
-  exit $driverExitCode
-}
-
-for ($attempt = 1; $attempt -le 40; $attempt++) {
-  $currentAdapters = @(Get-TapAdapters)
-  $createdAdapter = $currentAdapters |
-    Where-Object { $_.NetConnectionID -eq 'WEL TAP' } |
-    Select-Object -First 1
-  if ($null -ne $createdAdapter) {
-    exit 0
-  }
-
-  $createdAdapter = $currentAdapters |
-    Where-Object {
-      -not [string]::IsNullOrEmpty($_.GUID) -and
-      $existingGuids -notcontains $_.GUID
-    } |
-    Select-Object -First 1
-  if ($null -ne $createdAdapter -and (Set-TapConnectionName -Adapter $createdAdapter -Name 'WEL TAP')) {
-    exit 0
-  }
-
-  Start-Sleep -Milliseconds 500
-}
-
-exit 4
+# Exit 3 tells the NSIS installer to install the official TAP-only MSI
+# features, then run this adapter preparation step again.
+exit 3

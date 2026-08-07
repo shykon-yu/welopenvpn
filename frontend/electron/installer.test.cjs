@@ -8,16 +8,18 @@ const ensureTap = fs.readFileSync(path.join(__dirname, '..', 'build', 'ensure-we
 const removeTap = fs.readFileSync(path.join(__dirname, '..', 'build', 'remove-wel-tap.ps1'), 'utf8')
 const cleanupOpenVpnGui = fs.readFileSync(path.join(__dirname, '..', 'build', 'cleanup-openvpn-gui.ps1'), 'utf8')
 
-test('bundles the OpenVPN runtime and installs only the standalone TAP driver', () => {
-  assert.doesNotMatch(installer, /msiexec\.exe/)
-  assert.doesNotMatch(installer, /wel-openvpn\.msi/)
-  assert.match(installer, /tap-windows-9\.24\.6\\x64\\tapinstall\.exe/)
-  assert.match(installer, /-TapInstallPath "\$PLUGINSDIR\\tapinstall\.exe"/)
+test('bundles the OpenVPN runtime and installs only the official TAP MSI features', () => {
+  assert.match(installer, /msiexec\.exe/)
+  assert.match(installer, /wel-tap\.msi/)
+  assert.match(installer, /ADDLOCAL=Drivers,Drivers\.TAPWindows6/)
+  assert.doesNotMatch(installer, /ADDLOCAL=[^\r\n]*Drivers\.Wintun/)
+  assert.doesNotMatch(installer, /ADDLOCAL=[^\r\n]*OpenVPN,Drivers/)
+  assert.match(installer, /WEL-TAP-install\.log/)
   assert.match(installer, /resources\\openvpn\\bin\\openvpn\.exe/)
   assert.match(installer, /File \/oname=wel-tapctl\.exe/)
   assert.match(installer, /ensure-wel-tap\.ps1/)
   assert.match(ensureTap, /create --hwid 'root\\tap0901' --name 'WEL TAP'/)
-  assert.match(ensureTap, /& \$TapInstallPath install \$DriverInfPath 'tap0901'/)
+  assert.doesNotMatch(ensureTap, /TapInstallPath|DriverInfPath/)
 })
 
 test('reuses WEL TAP across upgrades and removes numbered duplicates', () => {

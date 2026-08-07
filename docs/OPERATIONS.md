@@ -308,7 +308,7 @@ sudo mkdir -p /srv/we8-project/downloads/welopenvpn
 
 ```bash
 scp latest.json root@8.133.189.9:/srv/we8-project/downloads/welopenvpn/
-scp WEL-Platform-Setup-0.1.30.exe root@8.133.189.9:/srv/we8-project/downloads/welopenvpn/
+scp WEL-Platform-Setup-0.1.31.exe root@8.133.189.9:/srv/we8-project/downloads/welopenvpn/
 ```
 
 检查 HTTP 是否可读：
@@ -322,10 +322,10 @@ curl -sS http://8.133.189.9:1421/downloads/welopenvpn/latest.json
 
 ```json
 {
-  "version": "0.1.30",
-  "notes": "WEL职业联盟对战平台 v0.1.30",
-  "githubUrl": "https://github.com/shykon-yu/welopenvpn/releases/download/windows-client-latest/WEL-Platform-Setup-0.1.30.exe",
-  "serverUrl": "http://8.133.189.9:1421/downloads/welopenvpn/WEL-Platform-Setup-0.1.30.exe"
+  "version": "0.1.31",
+  "notes": "WEL职业联盟对战平台 v0.1.31",
+  "githubUrl": "https://github.com/shykon-yu/welopenvpn/releases/download/windows-client-latest/WEL-Platform-Setup-0.1.31.exe",
+  "serverUrl": "http://8.133.189.9:1421/downloads/welopenvpn/WEL-Platform-Setup-0.1.31.exe"
 }
 ```
 
