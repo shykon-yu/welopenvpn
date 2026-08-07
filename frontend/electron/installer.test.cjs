@@ -8,13 +8,12 @@ const ensureTap = fs.readFileSync(path.join(__dirname, '..', 'build', 'ensure-we
 const removeTap = fs.readFileSync(path.join(__dirname, '..', 'build', 'remove-wel-tap.ps1'), 'utf8')
 const cleanupOpenVpnGui = fs.readFileSync(path.join(__dirname, '..', 'build', 'cleanup-openvpn-gui.ps1'), 'utf8')
 
-test('bundles the OpenVPN runtime and installs only the official TAP MSI features', () => {
-  assert.match(installer, /msiexec\.exe/)
-  assert.match(installer, /wel-tap\.msi/)
-  assert.match(installer, /ADDLOCAL=Drivers,Drivers\.TAPWindows6/)
-  assert.doesNotMatch(installer, /ADDLOCAL=[^\r\n]*Drivers\.Wintun/)
-  assert.doesNotMatch(installer, /ADDLOCAL=[^\r\n]*OpenVPN,Drivers/)
-  assert.match(installer, /WEL-TAP-install\.log/)
+test('bundles the OpenVPN runtime and installs only the official Win7 TAP package', () => {
+  assert.doesNotMatch(installer, /msiexec\.exe/)
+  assert.doesNotMatch(installer, /\.msi/)
+  assert.match(installer, /tap-windows-9\.24\.7-I601-Win7\.exe/)
+  assert.match(installer, /wel-tap-win7\.exe" \/S/)
+  assert.doesNotMatch(installer, /Drivers\.Wintun|OpenVPN GUI.*ADDLOCAL/)
   assert.match(installer, /resources\\openvpn\\bin\\openvpn\.exe/)
   assert.match(installer, /File \/oname=wel-tapctl\.exe/)
   assert.match(installer, /ensure-wel-tap\.ps1/)

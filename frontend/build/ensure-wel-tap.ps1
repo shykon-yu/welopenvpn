@@ -89,6 +89,6 @@ if ($createExitCode -eq 0) {
   }
 }
 
-# Exit 3 tells the NSIS installer to install the official TAP-only MSI
-# features, then run this adapter preparation step again.
+# Exit 3 tells the NSIS installer to run the official Win7 TAP-only installer,
+# then run this adapter preparation step again.
 exit 3

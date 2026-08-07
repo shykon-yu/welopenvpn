@@ -30,7 +30,7 @@ welopenvpn/
 │   │   ├── installer.nsh
 │   │   ├── ensure-wel-tap.ps1
 │   │   ├── remove-wel-tap.ps1
-│   │   └── OpenVPN-2.5.10-I601-amd64.msi
+│   │   └── tap-windows-9.24.7-I601-Win7.exe
 │   ├── electron/
 │   │   ├── main.cjs
 │   │   ├── preload.cjs
@@ -110,7 +110,7 @@ npm run electron:build
 Windows 构建必须包含：
 
 - `frontend/resources/openvpn/bin/openvpn.exe` 及其依赖 DLL
-- `frontend/build/OpenVPN-2.5.10-I601-amd64.msi` 中的官方 TAP 驱动组件
+- `frontend/build/tap-windows-9.24.7-I601-Win7.exe` 官方 TAP 驱动安装包
 - `frontend/resources/openvpn/ca.crt`
 
 不要把 `server.key`、CA 私钥或其他服务端密钥放入仓库。

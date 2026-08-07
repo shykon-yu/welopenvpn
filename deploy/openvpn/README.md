@@ -36,6 +36,6 @@ DNS server.
 ## Release resources
 
 The Windows client bundles the official OpenVPN 2.5.10 I601 x64 runtime under
-`frontend/resources/openvpn/bin/` and installs only the TAP-Windows driver
-features from `frontend/build/OpenVPN-2.5.10-I601-amd64.msi`. Keep only the
-public `ca.crt` in client resources. Never commit the server private key.
+`frontend/resources/openvpn/bin/` and installs only the official TAP-Windows
+9.24.7 I601 Win7 package from `frontend/build/`. Keep only the public `ca.crt`
+in client resources. Never commit the server private key.

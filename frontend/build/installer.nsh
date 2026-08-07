@@ -3,7 +3,7 @@
   File /oname=ensure-wel-tap.ps1 "${BUILD_RESOURCES_DIR}\ensure-wel-tap.ps1"
   File /oname=remove-wel-tap.ps1 "${BUILD_RESOURCES_DIR}\remove-wel-tap.ps1"
   File /oname=cleanup-openvpn-gui.ps1 "${BUILD_RESOURCES_DIR}\cleanup-openvpn-gui.ps1"
-  File /oname=wel-tap.msi "${BUILD_RESOURCES_DIR}\OpenVPN-2.5.10-I601-amd64.msi"
+  File /oname=wel-tap-win7.exe "${BUILD_RESOURCES_DIR}\tap-windows-9.24.7-I601-Win7.exe"
 
   ; OpenVPN runs directly from the application resources directory. Only the
   ; signed TAP-Windows driver is installed into Windows.
@@ -16,7 +16,7 @@ runtime_missing:
 
 runtime_ready:
   ; Clean startup entries left by older WEL releases that installed the full
-  ; OpenVPN feature set. The current MSI invocation installs TAP only.
+  ; OpenVPN feature set. The current helper installs TAP-Windows only.
   nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /F /IM openvpn-gui.exe'
   Pop $3
   IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 cleanup_gui_system32
@@ -57,20 +57,20 @@ cleanup_gui_done:
   Pop $2
   StrCmp $2 "0" tap_ready
 
-  DetailPrint "正在安装官方 TAP-Windows 驱动..."
-  nsExec::ExecToLog '"$SYSDIR\msiexec.exe" /i "$PLUGINSDIR\wel-tap.msi" /qn /norestart ADDLOCAL=Drivers,Drivers.TAPWindows6 /L*v "$TEMP\WEL-TAP-install.log"'
+  DetailPrint "正在安装官方 Win7 TAP-Windows 驱动..."
+  nsExec::ExecToLog '"$PLUGINSDIR\wel-tap-win7.exe" /S'
   Pop $2
   StrCmp $2 "0" tap_driver_installed
   StrCmp $2 "1641" tap_driver_installed
   StrCmp $2 "3010" tap_driver_installed
-  MessageBox MB_ICONSTOP|MB_OK "WEL 虚拟网卡驱动安装失败（错误代码：$2）。请确认 Windows 7 已安装 SP1 和 SHA-2 更新。安装日志：$TEMP\WEL-TAP-install.log"
+  MessageBox MB_ICONSTOP|MB_OK "WEL 虚拟网卡驱动安装失败（错误代码：$2）。请确认 Windows 7 已安装 SP1 和 SHA-2 更新。"
   Abort
 
 tap_driver_installed:
   nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\ensure-wel-tap.ps1" -TapctlPath "$INSTDIR\resources\openvpn\bin\tapctl.exe"'
   Pop $2
   StrCmp $2 "0" tap_ready
-  MessageBox MB_ICONSTOP|MB_OK "TAP-Windows 驱动已安装，但 WEL 虚拟网卡创建失败（错误代码：$2）。请重启电脑后重新运行安装包。安装日志：$TEMP\WEL-TAP-install.log"
+  MessageBox MB_ICONSTOP|MB_OK "TAP-Windows 驱动已安装，但 WEL 虚拟网卡创建失败（错误代码：$2）。请重启电脑后重新运行安装包。"
   Abort
 
 tap_ready:
