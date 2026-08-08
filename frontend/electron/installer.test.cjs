@@ -10,12 +10,14 @@ const removeTap = fs.readFileSync(buildPath('remove-wel-tap.ps1'), 'utf8')
 const hideTapWindows = fs.readFileSync(buildPath('hide-tap-windows.ps1'), 'utf8')
 const cleanupOpenVpnGui = fs.readFileSync(buildPath('cleanup-openvpn-gui.ps1'), 'utf8')
 
-test('bundles the OpenVPN runtime and installs only the official TAP MSI feature', () => {
-  assert.match(installer, /msiexec\.exe/)
-  assert.match(installer, /OpenVPN-2\.5\.10-I601-amd64\.msi/)
-  assert.match(installer, /ADDLOCAL=Drivers,Drivers\.TAPWindows6/)
-  assert.match(installer, /TAPWINDOWS6ADAPTERS=0/)
-  assert.match(installer, /ARPSYSTEMCOMPONENT=1/)
+test('bundles the OpenVPN runtime and installs the Win7-compatible TAP helper', () => {
+  assert.match(installer, /tap-windows-9\.21\.2\.exe/)
+  assert.match(installer, /wel-tap-win7\.exe" \/S/)
+  assert.match(installer, /remember-installed-tap\.ps1/)
+  assert.match(installer, /tap-before\.txt/)
+  assert.doesNotMatch(installer, /OpenVPN-2\.5\.10-I601-amd64\.msi/)
+  assert.doesNotMatch(installer, /TAPWINDOWS6ADAPTERS=0/)
+  assert.doesNotMatch(installer, /ARPSYSTEMCOMPONENT=1/)
   assert.doesNotMatch(installer, /tap-windows-9\.24\.7-I601-Win7\.exe/)
   assert.match(installer, /cleanup_previous_msi_done/)
   assert.match(installer, /remove-wel-openvpn-msi\.ps1/)
@@ -36,8 +38,9 @@ test('reuses one WEL adapter across upgrades and removes old WEL duplicates', ()
   assert.doesNotMatch(ensureTap, /Get-NetAdapter/)
   assert.match(removeTap, /for \(\$i = 2; \$i -le 50; \$i\+\+\)/)
   assert.match(removeTap, /WEL Virtual LAN/)
+  assert.match(removeTap, /tap-create\.txt/)
+  assert.match(removeTap, /delete \$rememberedGuid/)
   assert.match(removeTap, /& \$TapctlPath delete \$name/)
-  assert.doesNotMatch(installer, /wel-tap-win7\.exe|remember-installed-tap\.ps1/)
 })
 
 test('keeps the Windows network connection name stable on Windows 7', () => {
@@ -47,10 +50,9 @@ test('keeps the Windows network connection name stable on Windows 7', () => {
 })
 
 test('hides TAP/OpenVPN entries without hiding WEL', () => {
-  assert.match(installer, /ARPSYSTEMCOMPONENT=1/)
   assert.match(hideTapWindows, /SystemComponent/)
   assert.match(hideTapWindows, /TAP\[- \]Windows/)
-  assert.match(installer, /tap-msi-2\.5\.10\.ready/)
+  assert.match(installer, /hide-tap-windows\.ps1/)
   assert.doesNotMatch(installer, /\$COMMONAPPDATA/)
 })
 

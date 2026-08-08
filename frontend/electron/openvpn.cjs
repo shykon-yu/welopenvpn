@@ -161,7 +161,7 @@ Set-ItemProperty -LiteralPath $connectionKey -Name 'Name' -Value '${TAP_NAME}' -
 `, 6000)
     return { ...adapter, name: TAP_NAME }
   } catch {
-    throw new Error('WEL 虚拟网卡名称无法设置为 WEL TAP，请重新运行安装包并同意管理员授权')
+    return adapter
   }
 }
 
@@ -181,7 +181,7 @@ async function prepare() {
   if (adapter) {
     adapter = await ensureAsciiTapName(adapter)
     rememberTapAdapter(adapter)
-    return { ...current, adapterReady: true, tapName: adapter.name, tapNode: adapter.name, tapGuid: adapter.guid }
+    return { ...current, adapterReady: true, tapName: adapter.name, tapNode: adapter.guid, tapGuid: adapter.guid }
   }
 
   const createOutput = await runTapctl(tapctl, ['create', '--hwid', 'root\\tap0901', '--name', TAP_NAME], 20000)
@@ -193,7 +193,7 @@ async function prepare() {
     if (adapter) {
       adapter = await ensureAsciiTapName(adapter)
       rememberTapAdapter(adapter)
-      return { ...current, adapterReady: true, tapName: adapter.name, tapNode: adapter.name, tapGuid: adapter.guid }
+      return { ...current, adapterReady: true, tapName: adapter.name, tapNode: adapter.guid, tapGuid: adapter.guid }
     }
     await wait(500)
   }
