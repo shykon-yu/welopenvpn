@@ -29,7 +29,7 @@ const form = ref({ username: '', password: '' })
 const GAME_PATH_KEY = 'we8.game-path'
 const LEGACY_GAME_PATH_KEY = 'pes8.game-path'
 const FIREWALL_GAME_PATH_KEY = 'we8.firewall-game-path'
-const FIREWALL_RULE_REVISION = '3'
+const FIREWALL_RULE_REVISION = '4'
 const gamePath = ref(localStorage.getItem(GAME_PATH_KEY) ?? localStorage.getItem(LEGACY_GAME_PATH_KEY) ?? '')
 const totalOnline = computed(() => rooms.value.reduce((total, room) => total + room.members, 0))
 const activeRoom = computed(() => activeLease.value ? rooms.value.find(room => room.id === activeLease.value?.room_id) ?? null : null)

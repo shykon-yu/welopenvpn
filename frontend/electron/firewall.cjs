@@ -3,6 +3,11 @@ const { runPowerShell } = require('./network.cjs')
 const INBOUND_RULE = 'WEL WE8 Game Inbound'
 const OUTBOUND_RULE = 'WEL WE8 Game Outbound'
 const BROADCAST_OUTBOUND_RULE = 'WEL WE8 Game Broadcast Outbound'
+const VPN_UDP_INBOUND_RULE = 'WEL VPN UDP Inbound'
+const VPN_UDP_OUTBOUND_RULE = 'WEL VPN UDP Outbound'
+const VPN_UDP_BROADCAST_OUTBOUND_RULE = 'WEL VPN UDP Broadcast Outbound'
+const WEL_VPN_SUBNET = '10.80.0.0/16'
+const LIMITED_BROADCAST = '255.255.255.255'
 
 function powerShellLiteral(value) {
   return `'${String(value).replace(/'/g, "''")}'`
@@ -17,6 +22,12 @@ if ($LASTEXITCODE -ne 0) { exit 41 }
 if ($LASTEXITCODE -ne 0) { exit 42 }
 & $netsh advfirewall firewall show rule "name=${BROADCAST_OUTBOUND_RULE}" "verbose" | Out-Null
 if ($LASTEXITCODE -ne 0) { exit 43 }
+& $netsh advfirewall firewall show rule "name=${VPN_UDP_INBOUND_RULE}" "verbose" | Out-Null
+if ($LASTEXITCODE -ne 0) { exit 44 }
+& $netsh advfirewall firewall show rule "name=${VPN_UDP_OUTBOUND_RULE}" "verbose" | Out-Null
+if ($LASTEXITCODE -ne 0) { exit 45 }
+& $netsh advfirewall firewall show rule "name=${VPN_UDP_BROADCAST_OUTBOUND_RULE}" "verbose" | Out-Null
+if ($LASTEXITCODE -ne 0) { exit 46 }
 `
 }
 
@@ -28,14 +39,26 @@ $netsh = Join-Path $env:SystemRoot 'System32\\netsh.exe'
 & $netsh advfirewall firewall delete rule "name=${INBOUND_RULE}" | Out-Null
 & $netsh advfirewall firewall delete rule "name=${OUTBOUND_RULE}" | Out-Null
 & $netsh advfirewall firewall delete rule "name=${BROADCAST_OUTBOUND_RULE}" | Out-Null
+& $netsh advfirewall firewall delete rule "name=${VPN_UDP_INBOUND_RULE}" | Out-Null
+& $netsh advfirewall firewall delete rule "name=${VPN_UDP_OUTBOUND_RULE}" | Out-Null
+& $netsh advfirewall firewall delete rule "name=${VPN_UDP_BROADCAST_OUTBOUND_RULE}" | Out-Null
 
-& $netsh advfirewall firewall add rule "name=${INBOUND_RULE}" "dir=in" "action=allow" "program=$program" "enable=yes" "profile=any" "remoteip=10.80.0.0/16" "protocol=any" | Out-Null
+& $netsh advfirewall firewall add rule "name=${INBOUND_RULE}" "dir=in" "action=allow" "program=$program" "enable=yes" "profile=any" "remoteip=${WEL_VPN_SUBNET}" "protocol=any" | Out-Null
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-& $netsh advfirewall firewall add rule "name=${OUTBOUND_RULE}" "dir=out" "action=allow" "program=$program" "enable=yes" "profile=any" "remoteip=10.80.0.0/16" "protocol=any" | Out-Null
+& $netsh advfirewall firewall add rule "name=${OUTBOUND_RULE}" "dir=out" "action=allow" "program=$program" "enable=yes" "profile=any" "remoteip=${WEL_VPN_SUBNET}" "protocol=any" | Out-Null
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-& $netsh advfirewall firewall add rule "name=${BROADCAST_OUTBOUND_RULE}" "dir=out" "action=allow" "program=$program" "enable=yes" "profile=any" "remoteip=255.255.255.255" "protocol=any" | Out-Null
+& $netsh advfirewall firewall add rule "name=${BROADCAST_OUTBOUND_RULE}" "dir=out" "action=allow" "program=$program" "enable=yes" "profile=any" "remoteip=${LIMITED_BROADCAST}" "protocol=any" | Out-Null
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+& $netsh advfirewall firewall add rule "name=${VPN_UDP_INBOUND_RULE}" "dir=in" "action=allow" "enable=yes" "profile=any" "remoteip=${WEL_VPN_SUBNET}" "protocol=UDP" | Out-Null
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+& $netsh advfirewall firewall add rule "name=${VPN_UDP_OUTBOUND_RULE}" "dir=out" "action=allow" "enable=yes" "profile=any" "localip=${WEL_VPN_SUBNET}" "remoteip=${WEL_VPN_SUBNET}" "protocol=UDP" | Out-Null
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+& $netsh advfirewall firewall add rule "name=${VPN_UDP_BROADCAST_OUTBOUND_RULE}" "dir=out" "action=allow" "enable=yes" "profile=any" "localip=${WEL_VPN_SUBNET}" "remoteip=${LIMITED_BROADCAST}" "protocol=UDP" | Out-Null
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 ${buildFirewallVerificationScript(gamePath)}
 `

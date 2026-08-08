@@ -15,10 +15,15 @@ test('limits game firewall rules to the WEL virtual subnet', () => {
   assert.match(script, /WEL WE8 Game Inbound/)
   assert.match(script, /WEL WE8 Game Outbound/)
   assert.match(script, /WEL WE8 Game Broadcast Outbound/)
+  assert.match(script, /WEL VPN UDP Inbound/)
+  assert.match(script, /WEL VPN UDP Outbound/)
+  assert.match(script, /WEL VPN UDP Broadcast Outbound/)
   assert.match(script, /remoteip=10\.80\.0\.0\/16/)
+  assert.match(script, /localip=10\.80\.0\.0\/16/)
   assert.match(script, /remoteip=255\.255\.255\.255/)
   assert.match(script, /profile=any/)
   assert.match(script, /program=\$program/)
+  assert.match(script, /protocol=UDP/)
 })
 
 test('verifies that all path-specific firewall rules exist in Windows', () => {
@@ -27,9 +32,15 @@ test('verifies that all path-specific firewall rules exist in Windows', () => {
   assert.match(script, /show rule "name=WEL WE8 Game Inbound" "verbose"/)
   assert.match(script, /show rule "name=WEL WE8 Game Outbound" "verbose"/)
   assert.match(script, /show rule "name=WEL WE8 Game Broadcast Outbound" "verbose"/)
+  assert.match(script, /show rule "name=WEL VPN UDP Inbound" "verbose"/)
+  assert.match(script, /show rule "name=WEL VPN UDP Outbound" "verbose"/)
+  assert.match(script, /show rule "name=WEL VPN UDP Broadcast Outbound" "verbose"/)
   assert.match(script, /exit 41/)
   assert.match(script, /exit 42/)
   assert.match(script, /exit 43/)
+  assert.match(script, /exit 44/)
+  assert.match(script, /exit 45/)
+  assert.match(script, /exit 46/)
 })
 
 test('reconfigures firewall rules when their revision changes', () => {
