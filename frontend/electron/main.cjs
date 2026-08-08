@@ -5,7 +5,7 @@ const path = require('node:path')
 const { pathToFileURL } = require('node:url')
 const { version: appVersion } = require('../package.json')
 const { checkGameFirewall, configureGameFirewall } = require('./firewall.cjs')
-const { decodeProcessOutput, findNetstatLines, inspectVpnNetwork, parseTasklistPids, prioritizeVpnNetwork, runProcess } = require('./network.cjs')
+const { decodeProcessOutput, findNetstatLines, inspectVpnNetwork, parseTasklistPids, prioritizeVpnNetwork, runPowerShell, runProcess } = require('./network.cjs')
 const openvpn = require('./openvpn.cjs')
 
 if (process.platform === 'win32') {
@@ -105,6 +105,88 @@ async function parseGameNetwork() {
   return lines.join('\n')
 }
 
+const DIAGNOSTIC_FIREWALL_RULES = [
+  'WEL WE8 Game Inbound',
+  'WEL WE8 Game Outbound',
+  'WEL WE8 Game Broadcast Outbound',
+  'WEL VPN UDP Inbound',
+  'WEL VPN UDP Outbound',
+  'WEL VPN UDP Broadcast Outbound',
+]
+
+async function readNetworkProfile(network) {
+  if (process.platform !== 'win32' || !network?.interfaceIndex) return '网络类别: 未知'
+  try {
+    const output = await runPowerShell(`
+$idx = ${Number(network.interfaceIndex)}
+try {
+  $profile = Get-NetConnectionProfile -InterfaceIndex $idx -ErrorAction Stop | Select-Object -First 1
+  if ($null -ne $profile) {
+    [Console]::Out.WriteLine(("网络类别: {0} / {1}" -f $profile.Name, $profile.NetworkCategory))
+    exit 0
+  }
+} catch {}
+[Console]::Out.WriteLine('网络类别: 当前系统不支持自动读取或未识别')
+`, 5000)
+    return output.trim() || '网络类别: 未知'
+  } catch {
+    return '网络类别: 读取失败'
+  }
+}
+
+async function readFirewallDiagnostics() {
+  if (process.platform !== 'win32') return '防火墙规则: 仅支持 Windows 客户端'
+  const netsh = `${process.env.SystemRoot || 'C:\\Windows'}\\System32\\netsh.exe`
+  const lines = []
+  for (const name of DIAGNOSTIC_FIREWALL_RULES) {
+    try {
+      await runProcess(netsh, ['advfirewall', 'firewall', 'show', 'rule', `name=${name}`, 'verbose'], 5000)
+      lines.push(`${name}: 存在`)
+    } catch {
+      lines.push(`${name}: 缺失`)
+    }
+  }
+  return `防火墙规则:\n${lines.join('\n')}`
+}
+
+async function readArpDiagnostics() {
+  if (process.platform !== 'win32') return 'ARP缓存: 仅支持 Windows 客户端'
+  const arp = `${process.env.SystemRoot || 'C:\\Windows'}\\System32\\arp.exe`
+  try {
+    const output = await runProcess(arp, ['-a'], 5000)
+    const lines = output
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => /^10\.80\.\d+\.\d+\s+/.test(line))
+      .slice(0, 20)
+    return `ARP缓存(10.80): ${lines.length ? `\n${lines.join('\n')}` : '未发现 10.80 记录'}`
+  } catch {
+    return 'ARP缓存: 读取失败'
+  }
+}
+
+async function readVirtualAdapterDiagnostics() {
+  if (process.platform !== 'win32') return '虚拟网卡列表: 仅支持 Windows 客户端'
+  try {
+    const output = await runPowerShell(`
+Get-WmiObject Win32_NetworkAdapter -ErrorAction SilentlyContinue |
+  Where-Object {
+    $_.Name -match 'TAP|OpenVPN|SoftEther|VPN|ZeroTier|Radmin|Hamachi|Gateway' -or
+    $_.NetConnectionID -match 'TAP|OpenVPN|SoftEther|VPN|ZeroTier|Radmin|Hamachi|Gateway' -or
+    $_.ServiceName -match 'tap0901|vpn|zerotier|radmin|hamachi'
+  } |
+  Sort-Object InterfaceIndex |
+  ForEach-Object {
+    [Console]::Out.WriteLine(("{0} | {1} | {2} | 启用={3} | 服务={4}" -f $_.InterfaceIndex, $_.NetConnectionID, $_.Name, $_.NetEnabled, $_.ServiceName))
+  }
+`, 8000)
+    const lines = output.trim().split(/\r?\n/).filter(Boolean).slice(0, 30)
+    return `虚拟网卡列表: ${lines.length ? `\n${lines.join('\n')}` : '未检测到相关虚拟网卡'}`
+  } catch {
+    return '虚拟网卡列表: 读取失败'
+  }
+}
+
 function parsePingSummary(host, output) {
   const text = String(output || '').replace(/\r?\n/g, '\n')
   const reachable = /TTL=/i.test(text)
@@ -160,6 +242,12 @@ ipcMain.handle('launch-game', (_event, gamePath) => {
 })
 ipcMain.handle('copy-openvpn-diagnostics', async (_event, { subnetCidr, username }) => {
   const [desktop, network, gameNetwork] = await Promise.all([openvpn.status(), inspectVpnNetwork(subnetCidr), parseGameNetwork()])
+  const [networkProfile, firewallDiagnostics, arpDiagnostics, virtualAdapters] = await Promise.all([
+    readNetworkProfile(network),
+    readFirewallDiagnostics(),
+    readArpDiagnostics(),
+    readVirtualAdapterDiagnostics(),
+  ])
   clipboard.writeText([
     `WEL客户端版本: ${appVersion}`,
     `联机组件: ${desktop.ready ? '已准备' : '未准备'}`,
@@ -170,6 +258,10 @@ ipcMain.handle('copy-openvpn-diagnostics', async (_event, { subnetCidr, username
     `虚拟网卡MAC: ${network.macAddress || '未获取'}`,
     `VPN接口跃点: ${network.interfaceMetric ?? '未知'}`,
     `诊断提示: ${network.warnings.join('；') || '无'}`,
+    networkProfile,
+    firewallDiagnostics,
+    arpDiagnostics,
+    virtualAdapters,
     `WE8网络: ${gameNetwork}`,
   ].join('\r\n'))
   return network
