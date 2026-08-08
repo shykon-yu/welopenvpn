@@ -20,6 +20,11 @@ test('sends explicit exit notify to shrink stale UDP sessions on reconnect', () 
 test('configures the TAP address statically instead of using DHCP emulation', () => {
   const client = fs.readFileSync(path.join(__dirname, 'openvpn.cjs'), 'utf8')
   assert.match(client, /'ip-win32 netsh'/)
+  assert.match(client, /'dev-type tap'/)
+  assert.doesNotMatch(client, /'dev tap'/)
+  assert.match(client, /'tun-mtu 1400'/)
+  assert.match(client, /'mssfix 1360'/)
+  assert.match(client, /clearArpCache/)
 })
 
 test('keeps client and server cipher settings aligned', () => {

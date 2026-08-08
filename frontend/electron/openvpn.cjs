@@ -2,7 +2,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const { spawn } = require('node:child_process')
-const { prioritizeVpnNetwork, runPowerShell, waitForVpnNetwork } = require('./network.cjs')
+const { clearArpCache, prioritizeVpnNetwork, runPowerShell, waitForVpnNetwork } = require('./network.cjs')
 
 const DEFAULT_HOST = '8.133.189.9'
 const DEFAULT_PORT = 12001
@@ -252,8 +252,10 @@ function buildConfig({ host, port, username, token, roomID, subnetCidr, tapNode 
   fs.writeFileSync(logPath, '', { encoding: 'utf8' })
   const config = [
     'client',
-    'dev tap',
+    'dev-type tap',
     `dev-node "${tapNode}"`,
+    'tun-mtu 1400',
+    'mssfix 1360',
     'proto udp4',
     'explicit-exit-notify 1',
     `remote ${host} ${port}`,
@@ -441,12 +443,14 @@ async function connectAttempt({ executable, host, port, roomID, username, token,
         initialized = true
         const network = await waitForVpnNetwork(subnetCidr, 8000)
         if (!network.connected) throw new Error(`OpenVPN 已连接，但未获取 ${subnetCidr} 的虚拟 IP`)
+        await clearArpCache()
         return prioritizeVpnNetwork(subnetCidr)
       }
       if (OPENVPN_PROGRESS.test(liveOutput) || OPENVPN_PROGRESS.test(fileOutput)) {
         const network = await waitForVpnNetwork(subnetCidr, 8000)
         if (network.connected) {
           initialized = true
+          await clearArpCache()
           return prioritizeVpnNetwork(subnetCidr)
         }
       }

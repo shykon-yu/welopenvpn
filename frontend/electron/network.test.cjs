@@ -1,6 +1,6 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { analyzeNetwork, buildVpnPriorityScript, findNetstatLines, findRoomAddress, isIPv4InCIDR, parseAdapterOutput, parseNetshInterfaces, parseTasklistPids } = require('./network.cjs')
+const { analyzeNetwork, buildVpnPriorityScript, clearArpCache, findNetstatLines, findRoomAddress, isIPv4InCIDR, parseAdapterOutput, parseNetshInterfaces, parseTasklistPids } = require('./network.cjs')
 
 test('matches only addresses in the room subnet', () => {
   assert.equal(isIPv4InCIDR('10.80.3.10', '10.80.3.0/24'), true)
@@ -98,4 +98,8 @@ test('parses WE8 tasklist rows and matches netstat endpoints by PID', () => {
   assert.equal(endpoints.length, 2)
   assert.match(endpoints[0], /5739/)
   assert.match(endpoints[1], /ESTABLISHED/)
+})
+
+test('exports a best-effort ARP cache reset helper for Windows TAP reconnects', () => {
+  assert.equal(typeof clearArpCache, 'function')
 })

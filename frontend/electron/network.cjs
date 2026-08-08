@@ -296,6 +296,17 @@ async function prioritizeVpnNetwork(cidr) {
   }
 }
 
+async function clearArpCache() {
+  if (process.platform !== 'win32') return false
+  const netsh = `${process.env.SystemRoot || 'C:\\Windows'}\\System32\\netsh.exe`
+  try {
+    await runProcess(netsh, ['interface', 'ip', 'delete', 'arpcache'], 5000)
+    return true
+  } catch {
+    return false
+  }
+}
+
 async function waitForVpnNetwork(cidr, timeoutMs = 30000) {
   const startedAt = Date.now()
   while (Date.now() - startedAt < timeoutMs) {
@@ -309,6 +320,7 @@ async function waitForVpnNetwork(cidr, timeoutMs = 30000) {
 module.exports = {
   analyzeNetwork,
   buildVpnPriorityScript,
+  clearArpCache,
   decodeProcessOutput,
   findNetstatLines,
   findRoomAddress,
