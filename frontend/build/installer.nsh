@@ -87,7 +87,6 @@ cleanup_gui_done:
   SetRegView lastused
   SetShellVarContext all
 
-tap_before_install:
   DetailPrint "正在准备 WEL 虚拟网卡..."
   nsExec::ExecToStack '"$SYSDIR\cmd.exe" /D /S /C ""$INSTDIR\resources\openvpn\bin\tapctl.exe" list"'
   Pop $2
